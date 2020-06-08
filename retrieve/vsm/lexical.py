@@ -18,7 +18,7 @@ class Tfidf(VSMSoftCosine):
 
 
 class BOW(VSMSoftCosine):
-        def __init__(self, vocab, **kwargs):
+    def __init__(self, vocab, **kwargs):
         super().__init__(vocab, CountVectorizer, **kwargs)
 
     def fit(self, sents):

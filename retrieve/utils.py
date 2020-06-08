@@ -71,7 +71,18 @@ def load_embeddings(path, vocab=None):
 
 
 class Embeddings:
+    """
+    Convenience class to handle embeddings. This class is better initialized
+    from the method `from_csv`
+
+    Arguments
+    =========
+    keys : list of strings representing the words in the rows of vectors
+    vectors : an np.array(n_words, dim_size)
+    """
     def __init__(self, keys, vectors):
+        if len(keys) != len(vectors):
+            raise ValueError("Expected {} vectors".format(len(keys)))
         self.word2id = {}
         self.id2word = {}
         for idx, word in enumerate(keys):
@@ -95,39 +106,101 @@ class Embeddings:
 
     @classmethod
     def from_csv(cls, path, vocab=None):
+        """
+        Arguments
+        =========
+
+        path : str, path to file with embeddings in csv format
+            (word is assumed to go in first column)
+
+        vocab : obtional, subset of words to load
+
+        Output
+        ======
+
+        keys : dict, mapping words to the index in indices respecting the
+            order in which the keys appear
+        indices : list, mapping keys to the index in embedding matrix
+        """
         df = load_embeddings(path, vocab=vocab)
         return cls(list(df.keys()), np.array(df).T)
 
     def get_indices(self, words):
-        keys, indices = [], []
-        for w in words:
+        keys, indices = {}, []
+        for idx, w in enumerate(words):
             if w in self.word2id:
-                keys.append(w)
+                keys[w] = idx
                 indices.append(self.word2id[w])
         return keys, indices
 
-    def get_S(self, words=None, metric='cosine', fill_missing=False):
+    def get_S(self, words=None, fill_missing=False,
+              metric='cosine',
+              beta=1, cutoff=0.0):
         """
+        Arguments
+        =========
+
+        words : list (optional), words in desired order. The output matrix will
+            have word-similarities ordered according to the order in `words`.
+            However, if `fill_missing` is False, while the order is mantained,
+            there will be gaps.
+
         fill_missing : bool, whether to fill similarities with one-hot vectors
             for out-of-vocabulary words
-        """
-        keys, indices = self.get_indices(words or self.keys)
-        if words and fill_missing:
-            S = np.zeros((len(words), len(words)))
-            x, y = np.meshgrid(indices, indices)
-            S[x, y] = pairwise_kernels(self.vectors[indices], metric='cosine')
-        else:
-            S = pairwise_kernels(self.vectors[indices], metric='cosine')
 
-        # make sure diagonal is always 1
-        np.fill_diagonal(S, 1)
+        Output
+        ======
+        keys : list of words ordered as the output matrix
+
+        >>> vectors = [[0.35, 0.75], [0.5, 0.5], [0.75, 0.35]]
+        >>> embs = Embeddings(['a', 'c', 'e'], np.array(vectors))
+        >>> words = ['c', 'd', 'a', 'f']
+        >>> S = embs.get_S(words=words, fill_missing=True)
+        >>> S.shape             # asked for 4 words (fill_missing)
+        (4, 4)
+        >>> S[1, 3] == 0.0      # missing words evaluate to one-hot vectors
+        True
+        >>> w1, w2 = embs['a'], embs['c']
+        >>> S[0, 2] == np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        True
+        >>> S[2, 0] == S[0, 2]
+        True
+        >>> keys, S = embs.get_S(words=words)
+        >>> list(keys) == ['c', 'a']  # words only in keys in requested order
+        True
+        >>> S.shape             # only words in space (fill_missing=False)
+        (2, 2)
+        >>> w1, w2 = embs['a'], embs['c']
+        >>> S[0, 1] == np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        True
+        """
+        if fill_missing and not words:
+            raise ValueError("`fill_missing` requires `words`")
+
+        keys, indices = self.get_indices(words or self.keys)
+        S = pairwise_kernels(self.vectors[indices], metric=metric)
+        # apply modifications on S
+        S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
+        if cutoff > 0.0:
+            S[np.where(S <= cutoff)] = 0.0
+
+        if fill_missing:
+            S_ = np.zeros((len(words), len(words)))
+            src_x, src_y = np.meshgrid(indices, indices)
+            keys2words = np.array([keys[w] for w in words if w in keys])
+            trg_x, trg_y = np.meshgrid(keys2words, keys2words)
+            S_[trg_x, trg_y] = S[src_x, src_y]
+            S = S_
+            # make sure diagonal is always 1
+            np.fill_diagonal(S, 1)
+            return S
 
         return keys, S
 
     def nearest_neighbours(self, words, metric='cosine', n=10, **kwargs):
         keys, index = self.get_indices(words)
         D = pairwise_distances(
-            self.vectors[index], self.vectors, metric=metric, njobs=-1)
+            self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
         # get neighbours
         neighs = np.argsort(D, axis=1)[:, 1: n+1]
         # get distances
@@ -141,10 +214,10 @@ class Embeddings:
 
 
 if __name__ == '__main__':
-    embs = Embeddings.from_csv('../patrology/latin.token.embeddings')
+    embs = Embeddings.from_csv('latin.lemma.embeddings')
     keys = ['anima', 'caput', 'manus']
     metric = 'cosine'
     n = 10
-    embs.nearest_neighbours(keys, metric='euclidean')
+    nn_keys, neighs = embs.nearest_neighbours(keys, metric='euclidean')
     S = pairwise_distances(embs.vectors[:100], metric='cosine')
     D = pairwise_kernels(embs.vectors[:100], metric='cosine')

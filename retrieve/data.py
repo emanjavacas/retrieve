@@ -6,6 +6,7 @@ from typing import Any, List, Dict
 import string
 import re
 import logging
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -15,26 +16,57 @@ from retrieve import utils
 from retrieve.compare.align import local_alignment, get_horizontal_alignment
 
 
-logging.basicConfig(
-    format='%(asctime)s,%(msecs)d %(levelname)-8s [%(filename)s:%(lineno)d] %(message)s',
-    datefmt='%Y-%m-%d:%H:%M:%S',
-    level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 
 # regexes
 PUNCT = r"[{}]+".format(string.punctuation)
 
 
+@dataclass(eq=True, frozen=True)
+class Ref:
+    """
+    Dataclass to store reference information. It's hashable and allows
+    to incorporate metadata in the `meta` field as a tuple
+    """
+    ref: Any
+    meta: tuple = ()
+
+
 class Doc:
+    """
+    Convenience class representing a document.
+
+    Keeps any morphological tags passed to the constructor in memory
+    as well as doc ids and refs
+
+    Arguments
+    =========
+    fields : dict containing input
+        must include a "token" field with the tokenized text
+        currently it also assumes a "lemma" field
+        "pos" can be used for further preprocessing
+    doc_id : any document identifier
+    ref : Ref
+    """
     def __init__(self,
                  fields: Dict[str, List[any]],
                  doc_id: Any,
-                 ref: Any = None):
+                 refs: Any = None):
+
+        if isinstance(doc_id, int):
+            raise ValueError("Can't use `doc_id` of type integer")
+        if 'token' not in fields:
+            raise ValueError("`fields` requires 'token' data")
 
         self.fields = fields
         self.doc_id = doc_id
-        self.ref = ref
+        self.refs = refs
         self._features = []
+
+    @property
+    def text(self):
+        return ' '.join(self.fields['token'])
 
     def to_counter(self, field=None):
         if not field:
@@ -51,8 +83,8 @@ class Doc:
         return ' '.join(self.fields[field])
 
     def __repr__(self):
-        return '<Doc doc_id={} ref={} text="{}"/>'.format(
-            str(self.doc_id), str(self.ref), self.to_text()[:30] + "...")
+        return '<Doc doc_id={} refs={} text="{}"/>'.format(
+            str(self.doc_id), str(len(self.refs)), self.to_text()[:30] + "...")
 
 
 def _wrap_fn(fn, use_counter=False):
@@ -73,11 +105,23 @@ setattr(Doc, 'get_horizontal_alignment', _wrap_fn(get_horizontal_alignment))
 
 
 class Collection:
+    """
+    Class representing a collection of docs
+
+    Arguments
+    =========
+    docs : list of Doc
+    """
     def __init__(self, docs):
         self._docs = docs
+        self._doc_ids = {doc.doc_id: idx for idx, doc in enumerate(docs)}
 
     def __getitem__(self, idx):
-        return self._docs[idx]
+        if isinstance(idx, int):
+            # access by index
+            return self._docs[idx]
+        # access by key
+        return self._docs[self._doc_ids[idx]]
 
     def __len__(self):
         return len(self._docs)
@@ -136,6 +180,9 @@ class Collection:
 
 
 class TextPreprocessor:
+    """
+    Preprocess docs based on doc metadata
+    """
     def __init__(self,
                  field='lemma',
                  lower=True,
@@ -168,13 +215,13 @@ class TextPreprocessor:
 
             if self.drop_punctuation and re.fullmatch(
                     PUNCT, doc.fields[self.punct_field][i]):
-                logging.debug("Dropping punctuation: {}".format(
+                logger.debug("Dropping punctuation: {}".format(
                     doc.fields[self.punct_field][i]))
                 continue
 
             if self.stopwords:
                 if doc.fields[self.stop_field][i].lower() in self.stopwords:
-                    logging.debug("Dropping stopword: {}".format(
+                    logger.debug("Dropping stopword: {}".format(
                         doc.fields[self.stop_field][i]))
                     continue
 
@@ -184,7 +231,7 @@ class TextPreprocessor:
                     reg_match = False
                     break
             if not reg_match:
-                logging.debug("Dropping regex {}: {}".format(
+                logger.debug("Dropping regex {}: {}".format(
                     re_field, doc.fields[re_field][i]))
                 continue
 
@@ -193,7 +240,7 @@ class TextPreprocessor:
                     if self.replace_unk:
                         target = doc.fields[self.unk_field][i]
                     elif self.drop_unk:
-                        logging.debug("Dropping unknown")
+                        logger.debug("Dropping unknown")
                         continue
 
             if self.lower:
@@ -288,14 +335,15 @@ class Criterion(object, metaclass=MetaCriterion):
 
 
 class FeatureSelector:
-    def __init__(self):
+    def __init__(self, *colls):
         self.fitted = False
         self.features = {}
         self.freqs = []
         self.dfs = []
         self.ndocs = 0
+        self.register(*colls)
 
-    def update_stats(self, text):
+    def register_text(self, text):
         for ft, cnt in collections.Counter(text).items():
             idx = self.features.get(ft, len(self.features))
             if ft not in self.features:
@@ -307,10 +355,10 @@ class FeatureSelector:
                 self.dfs[idx] += 1
         self.ndocs += 1
 
-    def update_collection_stats(self, *colls):
+    def register(self, *colls):
         for coll in colls:
             for feats in coll.get_features():
-                self.update_stats(feats)
+                self.register_text(feats)
         self._fit()
 
         return self
@@ -347,6 +395,7 @@ class FeatureSelector:
         vocab = self.get_vocab(criterion)
         for doc in collection.get_docs():
             doc.features = [ft for ft in doc.features if ft in vocab]
+        return vocab
 
     def filter_texts(self, texts, criterion):
         vocab = self.get_vocab(criterion)
@@ -364,7 +413,7 @@ if __name__ == '__main__':
     start = time.time()
     processor.process_collection(collection)
     print(time.time() - start)
-    fsel = FeatureSelector().update_collection_stats(collection)
+    fsel = FeatureSelector(collection)
     fsel.get_vocab((0.5 <= Criterion.FREQ <= 0.95))
     fsel.get_vocab(Criterion.FREQ >= 0.95)
 

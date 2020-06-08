@@ -33,6 +33,15 @@ def weighted_containment(s1, s2, **kwargs):
     return num / den
 
 
+class get_similarities:
+    def __init__(self, search_index, queries):
+        self.search_index = search_index
+        self.queries = queries
+
+    def __call__(self, i):
+        return i, self.search_index.query(self.queries[i])
+
+
 class SetSimilarity:
     """
     Approximate set similarity
@@ -52,17 +61,26 @@ class SetSimilarity:
         return self
 
     def get_similarities(self, index, queries=None):
-        selfsearch = queries is None
+        self_search = False
+        if queries is None:
+            queries, self_search = index, True
+
         self.fit(index, queries=queries)
-        queries = queries or index
+
         S = dok_matrix((len(queries), len(index)))
+
         # do the search
         for idx in tqdm(range(len(queries)), total=len(queries),
                         desc="Running {}".format(self.similarity_fn)):
             for jdx, sim in self.search_index.query(queries[idx]):
                 S[idx, jdx] = sim
+
         # drop self-similarities
-        if selfsearch:
+        if self_search:
             S.setdiag(0)
+
+        # transform to csr
+        S = S.tocsr()
+        S.eliminate_zeros()
 
         return S

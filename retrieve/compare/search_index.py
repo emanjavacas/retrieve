@@ -12,6 +12,9 @@ from SetSimilaritySearch.utils import _frequency_order_transform, \
         _symmetric_similarity_funcs, _asymmetric_similarity_funcs, \
         _overlap_index_threshold_funcs
 
+logger = logging.getLogger(__name__)
+
+
 class SearchIndex(object):
     """This data structure supports set similarity search queries.
     The algorithm is a combination of the prefix filter and position filter
@@ -44,19 +47,19 @@ class SearchIndex(object):
         self.overlap_index_threshold_func = \
             _overlap_index_threshold_funcs[similarity_func_name]
         self.position_filter_func = _position_filter_funcs[similarity_func_name]
-        logging.debug("Building SearchIndex on {} sets.".format(len(index)))
-        logging.debug("Start frequency transform.")
+        logger.debug("Building SearchIndex on {} sets.".format(len(index)))
+        logger.debug("Start frequency transform.")
         self.sets, self.order = _frequency_order_transform(index + (queries or []))
         self.n_sets = len(index)
-        logging.debug("Finish frequency transform, {} tokens in total.".format(
+        logger.debug("Finish frequency transform, {} tokens in total.".format(
             len(self.order)))
         self.index = defaultdict(list)
-        logging.debug("Start indexing sets.")
+        logger.debug("Start indexing sets.")
         for i, s in enumerate(self.sets):
             prefix = self._get_prefix_index(s)
             for j, token in enumerate(prefix):
                 self.index[token].append((i, j))
-        logging.debug("Finished indexing sets.")
+        logger.debug("Finished indexing sets.")
 
     def _get_prefix_index(self, s):
         t = self.overlap_index_threshold_func(len(s), self.similarity_threshold)
@@ -78,15 +81,15 @@ class SearchIndex(object):
             is the index of the matching sets in the original list of sets.
         """
         s1 = np.sort([self.order[token] for token in s if token in self.order])
-        logging.debug("{} original tokens and {} tokens after applying "
-                      "frequency order.".format(len(s), len(s1)))
+        logger.debug("{} original tokens and {} tokens after applying "
+                     "frequency order.".format(len(s), len(s1)))
         prefix = self._get_prefix(s1)
         candidates = set([i for p1, token in enumerate(prefix)
                           for i, p2 in self.index[token]
                           if (i < self.n_sets and self.position_filter_func(
                               s1, self.sets[i], p1, p2,
                               self.similarity_threshold))])
-        logging.debug("{} candidates found.".format(len(candidates)))
+        logger.debug("{} candidates found.".format(len(candidates)))
         results = deque([])
         for i in candidates:
             s2 = self.sets[i]
@@ -94,5 +97,5 @@ class SearchIndex(object):
             if sim < self.similarity_threshold:
                 continue
             results.append((i, sim))
-        logging.debug("{} verified sets found.".format(len(results)))
+        logger.debug("{} verified sets found.".format(len(results)))
         return list(results)
