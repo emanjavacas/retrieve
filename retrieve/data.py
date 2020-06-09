@@ -126,11 +126,21 @@ class Collection:
     def __len__(self):
         return len(self._docs)
 
-    def get_docs(self):
+    def get_docs(self, index=None):
         """
         Generator over docs
+
+        Arguments
+        =========
+        index : list or set or dict of document indices to get (optional)
         """
-        yield from self._docs
+        # TODO: index should probably be based on doc ids
+        if index is not None:
+            index = set(index)
+        for idx, doc in enumerate(self._docs):
+            if index is not None and idx not in index:
+                continue
+            yield doc
 
     def get_nonempty_features(self, cast=None):
         """
@@ -250,9 +260,10 @@ class TextPreprocessor:
 
         return list(utils.get_ngrams(filtered, min_n=min_n, max_n=max_n))
 
-    def process_collection(self, collection, **kwargs):
-        for doc in collection.get_docs():
-            doc.features = self.process(doc, **kwargs)
+    def process_collections(self, *colls, **kwargs):
+        for coll in colls:
+            for doc in coll.get_docs():
+                doc.features = self.process(doc, **kwargs)
 
 
 class MetaCriterion(type):
@@ -381,20 +392,25 @@ class FeatureSelector:
         else:
             raise ValueError("Requested unknown stats")
 
-    def get_vocab(self, criterion):
+    def get_vocab(self, criterion=None):
         if not self.fitted:
             raise ValueError("Selector isn't fitted")
 
         id2ft = {idx: ft for ft, idx in self.features.items()}
+
+        if criterion is None:
+            return {id2ft[idx]: self.freqs[idx] for idx in id2ft}
+
         index = criterion.apply(self)
         index = sorted(index, key=self.freqs.__getitem__, reverse=True)
 
         return {id2ft[idx]: self.freqs[idx] for idx in index}
 
-    def filter_collection(self, collection, criterion):
+    def filter_collections(self, *colls, criterion=None):
         vocab = self.get_vocab(criterion)
-        for doc in collection.get_docs():
-            doc.features = [ft for ft in doc.features if ft in vocab]
+        for coll in colls:
+            for doc in coll.get_docs():
+                doc.features = [ft for ft in doc.features if ft in vocab]
         return vocab
 
     def filter_texts(self, texts, criterion):
@@ -411,7 +427,7 @@ if __name__ == '__main__':
     stops = utils.load_stopwords('all.stop')
     processor = TextPreprocessor(stopwords=stops, field_regexes={'token': '[a-z]+'})
     start = time.time()
-    processor.process_collection(collection)
+    processor.process_collections(collection)
     print(time.time() - start)
     fsel = FeatureSelector(collection)
     fsel.get_vocab((0.5 <= Criterion.FREQ <= 0.95))

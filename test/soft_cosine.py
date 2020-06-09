@@ -50,15 +50,15 @@ class TestSoftCosine(unittest.TestCase):
         sims = soft_cosine_similarities(self.query, self.index, S)
         for i in range(10):
             for j in range(10):
-                self.assertAlmostEqual(
-                    sims[i, j],
-                    soft_cosine_simple(self.query[i], self.index[j], S),
-                    msg=f"{i}!={j}")
+                sim1 = sims[i, j]
+                sim2 = soft_cosine_simple(self.query[i], self.index[j], S)
+                self.assertAlmostEqual(sim1, sim2, msg=f"{i}!={j}")
 
     def test_sparse(self):
-        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
+        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.0, beta=2)
         sims1 = soft_cosine_similarities(self.query, self.index, S)
+        self.assertFalse(scipy.sparse.issparse(sims1))
         S = scipy.sparse.lil_matrix(S)
         sims2 = soft_cosine_similarities(self.query, self.index, S)
         self.assertTrue(scipy.sparse.issparse(sims2))
-        self.assertTrue(np.allclose(sims2.todense(), sims1))
+        self.assertTrue(np.allclose(sims2.todense(), sims1.todense))

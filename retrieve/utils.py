@@ -3,7 +3,10 @@ import csv
 
 import numpy as np
 import pandas as pd
+import scipy.sparse
 from sklearn.metrics.pairwise import pairwise_distances, pairwise_kernels
+
+from retrieve.sparse_utils import set_threshold
 
 
 def get_ngrams(s, min_n=1, max_n=1, sep='--'):
@@ -151,6 +154,8 @@ class Embeddings:
         Output
         ======
         keys : list of words ordered as the output matrix
+        S : np.array (or scipy.sparse.lil_matrix) (vocab x vocab), this will be
+            a sparse array if a positive `cutoff` is passed
 
         >>> vectors = [[0.35, 0.75], [0.5, 0.5], [0.75, 0.35]]
         >>> embs = Embeddings(['a', 'c', 'e'], np.array(vectors))
@@ -181,19 +186,24 @@ class Embeddings:
         S = pairwise_kernels(self.vectors[indices], metric=metric)
         # apply modifications on S
         S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
-        if cutoff > 0.0:
-            S[np.where(S <= cutoff)] = 0.0
 
+        # drop elements
+        if cutoff > 0.0:
+            S = set_threshold(S, cutoff)
+
+        # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
-            S_ = np.zeros((len(words), len(words)))
+            S_ = scipy.sparse.lil_matrix((len(words), len(words)))
+            # rearrange
             src_x, src_y = np.meshgrid(indices, indices)
             keys2words = np.array([keys[w] for w in words if w in keys])
             trg_x, trg_y = np.meshgrid(keys2words, keys2words)
             S_[trg_x, trg_y] = S[src_x, src_y]
             S = S_
             # make sure diagonal is always 1
-            np.fill_diagonal(S, 1)
-            return S
+            S.setdiag(1)
+
+            return S.tocsr()
 
         return keys, S
 
