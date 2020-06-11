@@ -19,10 +19,11 @@ class TestSoftCosine(unittest.TestCase):
         # load
         vulg = load_vulgate(include_blb=True, max_verses=1000)
         # preprocess
-        TextPreprocessor().process_collection(vulg, min_n=1, max_n=1)
+        TextPreprocessor().process_collections(vulg, min_n=1, max_n=1)
         # drop features and get vocabulary
         fsel = FeatureSelector(vulg)
-        vocab = fsel.filter_collection(vulg, (Criterion.DF >= 2) & (Criterion.FREQ >= 5))
+        vocab = fsel.filter_collections(
+            vulg, criterion=(Criterion.DF >= 2) & (Criterion.FREQ >= 5))
         # get documents
         feats, _ = vulg.get_nonempty_features(cast=set)
         # transform to tfidf
@@ -55,10 +56,18 @@ class TestSoftCosine(unittest.TestCase):
                 self.assertAlmostEqual(sim1, sim2, msg=f"{i}!={j}")
 
     def test_sparse(self):
-        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.0, beta=2)
-        sims1 = soft_cosine_similarities(self.query, self.index, S)
-        self.assertFalse(scipy.sparse.issparse(sims1))
-        S = scipy.sparse.lil_matrix(S)
+        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
+        self.assertTrue(
+            scipy.sparse.issparse(S),
+            msg="get_S returns sparse if fill_missing is True or cutoff > 0.0")
         sims2 = soft_cosine_similarities(self.query, self.index, S)
-        self.assertTrue(scipy.sparse.issparse(sims2))
-        self.assertTrue(np.allclose(sims2.todense(), sims1.todense))
+        self.assertTrue(
+            scipy.sparse.issparse(sims2),
+            msg="soft_cosine_similarities returns sparse if S is sparse")
+        sims1 = soft_cosine_similarities(self.query, self.index, S.todense())
+        self.assertFalse(
+            scipy.sparse.issparse(sims1),
+            msg="soft_cosine_similarities returns dense if S is dense")
+        self.assertTrue(
+            np.allclose(sims2.todense(), sims1),
+            msg="sparse and dense results match")
