@@ -41,7 +41,10 @@ def _get_matches_fneg_tpos_at(q_idxs, i_idxs, ranking, at, strict):
 
 
 def _get_fpos_at(unchecked, ranking, at):
-    fpos = np.sum(np.all(np.isnan(ranking[unchecked, :at]), axis=1))
+    # empty ranks are represented as -1
+    # considers a false positive if at least one indexed doc is retrieved within
+    # the first ranked `at` documents
+    fpos = np.sum(np.any(0 < ranking[unchecked, :at], axis=1))
     return fpos
 
 
@@ -129,7 +132,7 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
     unchecked = np.arange(len(ranking))
     unchecked = unchecked[np.isin(unchecked, checked, invert=True)]
     for idx, at in enumerate(sorted(at_values)):
-        stats[idx_at]['fpos'] += _get_fpos_at(unchecked, ranking, at)
+        stats[idx]['fpos'] += _get_fpos_at(unchecked, ranking, at)
 
     return stats, matches
 
@@ -138,7 +141,7 @@ def f_score(p, r, beta=1):
     """
     F-score
     """
-    return (1 + beta ** 2) * ((p * r) / ((beta ** 2) * p) + r)
+    return (1 + beta ** 2) * ((p * r) / (((beta ** 2) * p) + r))
 
 
 def get_metrics(sims, refs, at_values=(1, 5, 10, 20), strict=False):
@@ -156,11 +159,13 @@ def get_metrics(sims, refs, at_values=(1, 5, 10, 20), strict=False):
         p = tpos / (tpos + fpos)
         # recall
         r = tpos / (tpos + fneg)
-        # f-score (1 and 0.5)
-        f1 = f_score(p, r)
+        # f-score (0.5, 1, 2)
+        f1 = f_score(p, r, beta=1)
+        f2 = f_score(p, r, beta=2)
         fp5 = f_score(p, r, beta=0.5)
+
         # accumulate
-        for score, metric in zip([p, r, f1, fp5], ['p', 'r', 'f1', 'f0.5']):
+        for score, metric in zip([p, r, fp5, f1, f2], ['p', 'r', 'f0.5', 'f1', 'f2']):
             results['{}@{}'.format(metric, at)] = score
 
     return results

@@ -7,46 +7,41 @@ from retrieve.compare.align import local_alignment
 
 
 class Workload:
-    def __init__(self, coll1, coll2, field='lemma', **kwargs):
+    def __init__(self, coll1, coll2, field='lemma', use_features=False, **kwargs):
         self.coll1 = coll1
         self.coll2 = coll2
         self.field = field
+        self.use_features = use_features
         self.kwargs = kwargs
 
     def __call__(self, tup):
         # unpack
         i, j = tup
+        if self.use_features:
+            s1, s2 = self.coll1[i].features, self.coll2[j].features
+        else:
+            s1, s2 = self.coll1[i].fields[self.field], self.coll2[j].fields[self.field]
 
-        return (i, j), local_alignment(
-            self.coll1[i].fields[self.field],
-            self.coll2[j].fields[self.field],
-            **self.kwargs)
+        return (i, j), local_alignment(s1, s2, **self.kwargs)
 
 
-def align_collections(coll1, coll2=None,
-                      field='lemma',
-                      S=None, doc_ids=None,
-                      processes=-1, **kwargs):
+def align_collections(queries, index=None, field='lemma', S=None, processes=-1, **kwargs):
 
-    if coll2 is None:
-        coll2 = coll1
+    if index is None:
+        index = queries
 
     # get target ids
     if S is not None:
         x, y, _ = scipy.sparse.find(S)
     else:
-        x, y = np.meshgrid(np.arange(len(coll1)), np.arange(len(coll2)))
+        x, y = np.meshgrid(np.arange(len(queries)), np.arange(len(index)))
         x, y = x.reshape(-1), y.reshape(-1)
-
-    if doc_ids is not None:
-        doc_ids = np.array(doc_ids)
-        x, y = doc_ids[x], doc_ids[y]
 
     x, y = x.tolist(), y.tolist()
 
-    workload = Workload(coll1, coll2, field, **kwargs)
+    workload = Workload(queries, index, field, **kwargs)
 
-    sims = scipy.sparse.dok_matrix((len(coll1), len(coll2)))  # sparse output
+    sims = scipy.sparse.dok_matrix((len(queries), len(index)))  # sparse output
     processes = processes if processes > 0 else mp.cpu_count()
     with mp.Pool(processes) as pool:
         for (i, j), (*_, score) in pool.map(workload, zip(x, y)):
@@ -65,14 +60,14 @@ if __name__ == '__main__':
     from retrieve.set_similarity import SetSimilarity
 
     # load
-    vulg = load_vulgate(include_blb=True, max_verses=1000)
+    vulg = load_vulgate(max_verses=1000)
     # preprocess
     TextPreprocessor().process_collections(vulg, min_n=2, max_n=4)
     # drop features and get vocabulary
     FeatureSelector(vulg).filter_collections(
         vulg, (Criterion.DF >= 2) & (Criterion.FREQ >= 5))
     # get documents
-    feats, doc_ids = vulg.get_nonempty_features(cast=set)
+    feats = vulg.get_features(cast=set)
     # set-based similarity
     S = SetSimilarity(0.5, similarity_fn="containment").get_similarities(feats)
 
@@ -86,8 +81,6 @@ if __name__ == '__main__':
     scorer = create_embedding_scorer(embs)
 
     x, y, _ = scipy.sparse.find(S)
-    print("Considering {}/{} comparisons".format(len(x), len(doc_ids) ** 2))
-    time = timeit.Timer(
-        lambda: align_collections(vulg, vulg, S=S, doc_ids=doc_ids)
-    ).timeit(5)
+    print("Considering {} comparisons".format(len(x)))
+    time = timeit.Timer(lambda: align_collections(vulg, vulg, S=S)).timeit(5)
     print(" - Took", time)

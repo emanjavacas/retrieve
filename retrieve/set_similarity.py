@@ -60,10 +60,10 @@ class SetSimilarity:
             similarity_threshold=self.threshold)
         return self
 
-    def get_similarities(self, index, queries=None):
-        self_search = False
-        if queries is None:
-            queries, self_search = index, True
+    def get_similarities(self, queries, index=None):
+        self_search = index is None
+        if index is None:
+            index = queries
 
         self.fit(index, queries=queries)
 

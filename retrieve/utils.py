@@ -1,4 +1,6 @@
 
+import json
+import contextlib
 import csv
 
 import numpy as np
@@ -183,6 +185,9 @@ class Embeddings:
             raise ValueError("`fill_missing` requires `words`")
 
         keys, indices = self.get_indices(words or self.keys)
+        if not keys:
+            raise ValueError("Couldn't find any of the requested words")
+
         S = pairwise_kernels(self.vectors[indices], metric=metric)
         # apply modifications on S
         S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
@@ -221,6 +226,33 @@ class Embeddings:
                   for i in range(len(keys))]
 
         return keys, neighs
+
+
+@contextlib.contextmanager
+def results_writer(fp):
+    from retrieve.evaluate import get_metrics
+    from retrieve import sparse_utils
+
+    fp = open(fp, 'w+')
+
+    def write(sims, refs, thresholds, **kwargs):
+        row = {}
+        row['results'] = []
+        row['nnz'] = []
+        for th in thresholds:
+            sims = sparse_utils.set_threshold(sims, th)
+            row['nnz'].append({'th': float(th), 'value': sims.nnz})
+            for metric, val in get_metrics(sims, refs).items():
+                row['results'].append({'metric': metric, 'th': float(th), 'val': val})
+        for key, val in kwargs.items():
+            row[key] = val
+
+        fp.write(json.dumps(row) + '\n')
+        fp.flush()
+
+    yield write
+
+    fp.close()
 
 
 if __name__ == '__main__':

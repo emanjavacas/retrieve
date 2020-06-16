@@ -198,8 +198,12 @@ def get_printable_string(s1, s2, a1, a2, gap_sym=GAP_SYM):
 
 
 def get_horizontal_alignment(s1, s2, a1=None, a2=None, gap_sym=GAP_SYM, **kwargs):
-    if not a1 or not a2:
+    if a1 is None or a2 is None:
         a1, a2, _ = local_alignment(s1, s2, **kwargs)
+
+    # empty alignment
+    if not a1 or not a2:
+        return ' '.join(s1), ' ', ' '.join(s2)
 
     # find start of both seqs
     str1 = str2 = alignment = ''
@@ -250,6 +254,9 @@ def get_local_alignment_cython(s1, s2, scorer, extend_gap, open_gap, terminal_ga
 
 def local_alignment(s1, s2, scorer=ConstantScorer(),
                     extend_gap=-1, open_gap=-1, terminal_gap=0, impl='cython'):
+    if len(s1) == 0 or len(s2) == 0:
+        return [], [], 0.0
+
     fn = get_local_alignment_cython if impl == 'cython' else get_local_alignment_numba
     return fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap)
 

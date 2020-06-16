@@ -25,7 +25,7 @@ class TestSoftCosine(unittest.TestCase):
         vocab = fsel.filter_collections(
             vulg, criterion=(Criterion.DF >= 2) & (Criterion.FREQ >= 5))
         # get documents
-        feats, _ = vulg.get_nonempty_features(cast=set)
+        feats = vulg.get_features(cast=set)
         # transform to tfidf
         feats = Tfidf(vocab).fit(feats).transform(feats)
         query, index = feats[:feats.shape[0]//2], feats[feats.shape[0]//2:]

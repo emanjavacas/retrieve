@@ -101,7 +101,7 @@ if __name__ == '__main__':
     fsel = FeatureSelector(vulg)
     vocab = fsel.filter_collections(vulg, (Criterion.DF >= 2) & (Criterion.FREQ >= 5))
     # get documents
-    feats, _ = vulg.get_nonempty_features()
+    feats = vulg.get_features()
     # transform to tfidf
     feats = Tfidf(vocab).fit(feats).transform(feats)
     query, index = feats[:2500], feats[2500:5000]

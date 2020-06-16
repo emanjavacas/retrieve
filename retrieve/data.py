@@ -2,7 +2,7 @@
 import functools
 import operator
 import collections
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 import string
 import re
 import logging
@@ -15,12 +15,7 @@ from retrieve.set_similarity import (jaccard, containment,
 from retrieve import utils
 from retrieve.compare.align import local_alignment, get_horizontal_alignment
 
-
 logger = logging.getLogger(__name__)
-
-
-# regexes
-PUNCT = r"[{}]+".format(string.punctuation)
 
 
 @dataclass(eq=True, frozen=True)
@@ -29,7 +24,8 @@ class Ref:
     Dataclass to store reference information. It's hashable and allows
     to incorporate metadata in the `meta` field as a tuple
     """
-    ref: Any
+    source: Tuple[Any]
+    target: Tuple[Any]
     meta: tuple = ()
 
 
@@ -51,8 +47,7 @@ class Doc:
     """
     def __init__(self,
                  fields: Dict[str, List[any]],
-                 doc_id: Any,
-                 refs: Any = None):
+                 doc_id: Any):
 
         if isinstance(doc_id, int):
             raise ValueError("Can't use `doc_id` of type integer")
@@ -61,7 +56,6 @@ class Doc:
 
         self.fields = fields
         self.doc_id = doc_id
-        self.refs = refs
         self._features = []
 
     @property
@@ -83,8 +77,8 @@ class Doc:
         return ' '.join(self.fields[field])
 
     def __repr__(self):
-        return '<Doc doc_id={} refs={} text="{}"/>'.format(
-            str(self.doc_id), str(len(self.refs)), self.to_text()[:30] + "...")
+        return '<Doc doc_id={} text="{}"/>'.format(
+            str(self.doc_id), self.to_text()[:30] + "...")
 
 
 def _wrap_fn(fn, use_counter=False):
@@ -125,6 +119,13 @@ class Collection:
 
     def __len__(self):
         return len(self._docs)
+
+    def __contains__(self, doc_id):
+        return doc_id in self._doc_ids
+
+    def get_doc_idx(self, doc_id):
+        # access by doc id
+        return self._doc_ids[doc_id]
 
     def get_docs(self, index=None):
         """
@@ -172,14 +173,16 @@ class Collection:
 
         Output
         ======
-        A generator, if only_nonempty is False (default), otherwise a tup
+        list of lists with features
         """
+        output = []
         for doc in self.get_docs():
             # get features
             feats = doc.features
             if cast is not None:
                 feats = cast(feats)
-            yield feats
+            output.append(feats)
+        return output
 
     def get_field_vocab(self, field):
         """
@@ -193,6 +196,9 @@ class TextPreprocessor:
     """
     Preprocess docs based on doc metadata
     """
+
+    PUNCT = r"[{}]+".format(string.punctuation)
+
     def __init__(self,
                  field='lemma',
                  lower=True,
@@ -224,7 +230,7 @@ class TextPreprocessor:
             target = doc.fields[self.field][i]
 
             if self.drop_punctuation and re.fullmatch(
-                    PUNCT, doc.fields[self.punct_field][i]):
+                    TextPreprocessor.PUNCT, doc.fields[self.punct_field][i]):
                 logger.debug("Dropping punctuation: {}".format(
                     doc.fields[self.punct_field][i]))
                 continue

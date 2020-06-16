@@ -12,7 +12,7 @@ def _top_k_dense(data, indices, indptr, k):
     nrows = indptr.shape[0] - 1  # substract one because of format
 
     # output variables
-    top_indices = np.zeros((nrows, k), dtype=indices.dtype) * np.nan
+    top_indices = np.zeros((nrows, k), dtype=indices.dtype) - 1
     top_data = np.zeros((nrows, k), dtype=data.dtype) * np.nan
 
     for i in nb.prange(nrows):
