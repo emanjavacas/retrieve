@@ -65,7 +65,7 @@ class VSM:
             for (i_start, i_stop), Q in tqdm.tqdm(sparse_chunks(queries, chunk_size),
                                                   total=n_chunks,
                                                   desc='Chunked similarities',
-                                                  disable_bar=disable_bar):
+                                                  disable=disable_bar):
                 Q_sims = pairwise_kernels(Q, index, metric=metric, n_jobs=-1)
                 if threshold > 0:
                     Q_sims = set_threshold(Q_sims, threshold)
@@ -75,6 +75,9 @@ class VSM:
             sims = pairwise_kernels(queries, index, metric=metric, n_jobs=-1)
             if threshold > 0.0:
                 sims = set_threshold(sims, threshold)
+
+        if scipy.sparse.isspmatrix_lil(sims):
+            sims = sims.tocsr()
 
         return sims
 

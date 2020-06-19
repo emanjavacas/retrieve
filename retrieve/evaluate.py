@@ -1,4 +1,6 @@
 
+import json
+import contextlib
 import collections
 
 import numpy as np
@@ -31,9 +33,13 @@ def _get_matches_fneg_tpos_at(q_idxs, i_idxs, ranking, at, strict):
         matches.append((q_match, i_match, rank))
 
     if strict:
+        # how many were strictly retrieved
         tpos = len(q_matches)
+        # how many of the many-to-many links were not retrieved
         fneg = len(q_idxs) * len(i_idxs) - len(q_matches)
     else:
+        # at least one was retrieved
+        # consider the whole match holistically
         tpos = int(len(matches) != 0)
         fneg = int(len(matches) == 0)
 
@@ -169,6 +175,45 @@ def get_metrics(sims, refs, at_values=(1, 5, 10, 20), strict=False):
             results['{}@{}'.format(metric, at)] = score
 
     return results
+
+
+def get_thresholded_metrics(sims, refs, thresholds, copy=False):
+    metrics = collections.defaultdict(list)
+
+    for th in thresholds:
+        sims = sparse_utils.set_threshold(sims, th, copy=copy)
+        for metric, val in get_metrics(sims, refs).items():
+            metrics[metric].append(val)
+        metrics['nnz'].append(sims.nnz)
+
+    return metrics
+
+
+@contextlib.contextmanager
+def results_writer(fp):
+    fp = open(fp, 'w+')
+
+    def write(sims, refs, thresholds, copy=False, **kwargs):
+        row = {}
+        row['results'] = []
+        row['nnz'] = []
+
+        metrics = get_thresholded_metrics(sims, refs, thresholds, copy=copy)
+
+        for th, nnz in zip(thresholds, metrics.pop('nnz')):
+            row['nnz'].append({'th': float(th), 'value': nnz})
+        for metric, vals in metrics.items():
+            for th, val in zip(thresholds, vals):
+                row['results'].append({'metric': metric, 'th': float(th), 'val': val})
+        for key, val in kwargs.items():
+            row[key] = val
+
+        fp.write(json.dumps(row) + '\n')
+        fp.flush()
+
+    yield write
+
+    fp.close()
 
 
 # import numpy as np

@@ -1,31 +1,63 @@
 
 import multiprocessing as mp
+
 import numpy as np
 import scipy.sparse
+import tqdm
 
-from retrieve.compare.align import local_alignment
+
+class Task:
+    def __init__(self, s1, s2, i, j, field='lemma', **kwargs):
+        self.s1 = s1
+        self.s2 = s2
+        self.i = i
+        self.j = j
+        self.field = field
+        self.kwargs = kwargs
+
+    def __call__(self):
+        # unpack
+        *_, score = self.s1.local_alignment(self.s2, field=self.field, **self.kwargs)
+        return (self.i, self.j), score
+
+
+class Worker(mp.Process):
+    def __init__(self, task_queue, result_queue):
+        super().__init__()
+        self.task_queue = task_queue
+        self.result_queue = result_queue
+
+    def run(self):
+        while True:
+            next_task = self.task_queue.get()
+            if next_task is None:
+                self.task_queue.task_done()
+                break
+            result = next_task()
+            self.task_queue.task_done()
+            self.result_queue.put(result)
 
 
 class Workload:
-    def __init__(self, coll1, coll2, field='lemma', use_features=False, **kwargs):
+    def __init__(self, coll1, coll2, field='lemma', **kwargs):
         self.coll1 = coll1
         self.coll2 = coll2
         self.field = field
-        self.use_features = use_features
         self.kwargs = kwargs
 
-    def __call__(self, tup):
+    def __call__(self, args):
         # unpack
-        i, j = tup
-        if self.use_features:
-            s1, s2 = self.coll1[i].features, self.coll2[j].features
-        else:
-            s1, s2 = self.coll1[i].fields[self.field], self.coll2[j].fields[self.field]
+        # i, j, queue = tup
+        i, j = args
+        *_, score = self.coll1[i].local_alignment(
+            self.coll2[j], field=self.field, **self.kwargs)
+        # update queue
+        # queue.put(1)
 
-        return (i, j), local_alignment(s1, s2, **self.kwargs)
+        return (i, j), score
 
 
-def align_collections(queries, index=None, field='lemma', S=None, processes=-1, **kwargs):
+def align_collections(queries, index=None, S=None, field=None, processes=1, **kwargs):
 
     if index is None:
         index = queries
@@ -39,15 +71,19 @@ def align_collections(queries, index=None, field='lemma', S=None, processes=-1, 
 
     x, y = x.tolist(), y.tolist()
 
-    workload = Workload(queries, index, field, **kwargs)
-
     sims = scipy.sparse.dok_matrix((len(queries), len(index)))  # sparse output
-    processes = processes if processes > 0 else mp.cpu_count()
-    with mp.Pool(processes) as pool:
-        for (i, j), (*_, score) in pool.map(workload, zip(x, y)):
-            sims[i, j] = score
 
-    return sims
+    processes = mp.cpu_count() if processes < 0 else processes
+    if processes == 1:
+        for i, j in tqdm.tqdm(zip(x, y), desc='Local alignment'):
+            sims[i, j] = queries[i].local_alignment(index[j], field=field, **kwargs)
+    else:
+        workload = Workload(queries, index, field=field, **kwargs)
+        with mp.Pool(processes) as pool:
+            for (i, j), score in pool.map(workload, zip(x, y)):
+                sims[i, j] = score
+
+    return sims.tocsr()
 
 
 if __name__ == '__main__':
@@ -55,7 +91,7 @@ if __name__ == '__main__':
 
     from retrieve.corpora import load_vulgate
     from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
-    from retrieve import utils
+    from retrieve.embeddings import Embeddings
     from retrieve.compare.align import create_embedding_scorer
     from retrieve.set_similarity import SetSimilarity
 
@@ -76,7 +112,7 @@ if __name__ == '__main__':
     vocab = FeatureSelector(vulg).filter_collections(
         vulg, (Criterion.DF >= 2) & (Criterion.FREQ >= 5))
     # load embeddings, make sure S is in same order as vocab
-    embs = utils.Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
+    embs = Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
     # embedding scorer
     scorer = create_embedding_scorer(embs)
 

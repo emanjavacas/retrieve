@@ -60,21 +60,20 @@ class Doc:
 
     @property
     def text(self):
-        return ' '.join(self.fields['token'])
+        return self.get_features(field='token')
 
     def to_counter(self, field=None):
+        return collections.Counter(self.get_features(field=field))
+
+    def get_features(self, field=None):
         if not field:
             if not self.features:
-                raise ValueError(
-                    "Doc [{}] needs to be processed if field is not passed".format(
-                        self.doc_id))
+                raise ValueError("Unprocessed doc: [{}]".format(str(self.doc_id)))
             text = self.features
         else:
             text = self.fields[field]
-        return collections.Counter(text)
 
-    def to_text(self, field='token'):
-        return ' '.join(self.fields[field])
+        return text
 
     def __repr__(self):
         return '<Doc doc_id={} text="{}"/>'.format(
@@ -82,11 +81,11 @@ class Doc:
 
 
 def _wrap_fn(fn, use_counter=False):
-    def wrapped(this, other, field='lemma', **kwargs):
+    def wrapped(this, that, field='lemma', **kwargs):
         if use_counter:
-            return fn(this.to_counter(field), other.to_counter(field), **kwargs)
+            return fn(this.to_counter(field), that.to_counter(field), **kwargs)
         else:
-            return fn(this.fields[field], other.fields[field], **kwargs)
+            return fn(this.get_features(field), that.get_features(field), **kwargs)
     return wrapped
 
 

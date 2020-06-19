@@ -102,14 +102,56 @@ def sparse_chunks(M, chunk_size):
         yield (start, stop), M[start:stop]
 
 
-def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix):
+def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=False):
+    """
+    Threshold a matrix on a given (possibly sparse matrix). This function
+    will increase the sparsity of the matrix. If the input is not sparse
+    it will default to numpy functionality.
+
+    Arguments
+    =========
+    X : sparse_matrix or np.array
+    threshold : float
+    sparse_matrix : output sparse matrix type
+    copy : whether to operate in place (only for sparse input)
+
+    >>> import scipy.sparse
+    >>> X = scipy.sparse.dok_matrix((10, 10))
+    >>> X[0, 0] = 0.5
+    >>> X[2, 4] = 0.25
+    >>> X[7, 1] = 0.75
+    >>> X[8, 7] = 0.15
+    >>> set_threshold(X, 0.1, copy=True).nnz
+    4
+    >>> set_threshold(X, 0.3, copy=True).nnz
+    3
+    >>> set_threshold(X, 0.8, copy=True).nnz
+    0
+    >>> _ = set_threshold(X, 0.5)
+    >>> X.nnz
+    2
+    >>> X_orig = X.copy()
+    >>> set_threshold(X, 0.6, copy=True)
+    >>> (X != X_orig).nnz
+    0
+    >>> set_threshold(X, 0.6, copy=False)
+    >>> (X != X_orig).nnz > 0
+    True
+    """
     if not scipy.sparse.issparse(X):
         X[np.where(X < threshold)] = 0.0
         return sparse_matrix(X)
+
+    if copy:
+        X2 = scipy.sparse.dok_matrix(X.shape)
+        for i, j, _ in zip(*scipy.sparse.find(X >= threshold)):
+            X2[i, j] = X[i, j]
+        return sparse_matrix(X2)
 
     if isinstance(X, scipy.sparse.lil_matrix):
         raise ValueError("Cannot efficiently drop items on lil_matrix")
 
     X.data[np.abs(X.data) < threshold] = 0.0
     X.eliminate_zeros()
+
     return X

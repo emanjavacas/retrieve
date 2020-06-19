@@ -6,7 +6,7 @@ import scipy.sparse
 
 from retrieve.corpora import load_vulgate
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
-from retrieve import utils
+from retrieve.embeddings import Embeddings
 from retrieve.vsm.lexical import Tfidf
 
 from retrieve.compare import soft_cosine_similarities, soft_cosine_simple
@@ -30,7 +30,7 @@ class TestSoftCosine(unittest.TestCase):
         feats = Tfidf(vocab).fit(feats).transform(feats)
         query, index = feats[:feats.shape[0]//2], feats[feats.shape[0]//2:]
         # load embeddings, make sure S is in same order as vocab
-        embs = utils.Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
+        embs = Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
 
         self.embs = embs
         self.query = query

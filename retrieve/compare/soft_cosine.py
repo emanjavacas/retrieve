@@ -80,6 +80,9 @@ def soft_cosine_similarities(queries, index, S, chunk_size=500, threshold=0.0,
 
         sims[i_start:i_stop, :] = Q_sims
 
+    if scipy.sparse.isspmatrix_lil(sims):
+        sims = sims.tocsr()
+
     return np.nan_to_num(sims, copy=False)
 
 
@@ -89,6 +92,7 @@ if __name__ == '__main__':
     from retrieve.corpora import load_vulgate
     from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
     from retrieve import utils
+    from retrieve.embeddings import Embeddings
     from retrieve.vsm.lexical import Tfidf
 
     # load
@@ -106,7 +110,7 @@ if __name__ == '__main__':
     feats = Tfidf(vocab).fit(feats).transform(feats)
     query, index = feats[:2500], feats[2500:5000]
     # load embeddings, make sure S is in same order as vocab
-    embs = utils.Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
+    embs = Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
 
     for cutoff in [0.25, 0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
         S = embs.get_S(words=vocab, fill_missing=True, cutoff=cutoff)
