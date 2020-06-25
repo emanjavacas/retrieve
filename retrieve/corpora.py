@@ -3,6 +3,7 @@ import os
 import glob
 import json
 import collections
+import warnings
 
 from retrieve.data import Doc, Ref, Collection
 
@@ -20,7 +21,7 @@ def encode_ref(ref):
 
 def read_testament_books(testament='new'):
     books = []
-    with open('texts/{}-testament.books'.format(testament)) as f:
+    with open('data/texts/{}-testament.books'.format(testament)) as f:
         for line in f:
             line = line.strip()
             books.append(line)
@@ -47,7 +48,7 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1):
     return docs
 
 
-def load_vulgate(path='texts/vulgate.csv',
+def load_vulgate(path='data/texts/vulgate.csv',
                  include_blb=False, split_testaments=False, **kwargs):
 
     docs = read_bible(path, **kwargs)
@@ -64,7 +65,7 @@ def load_vulgate(path='texts/vulgate.csv',
         elif doc.doc_id[0] in new:
             new_books.append(doc)
         else:
-            raise ValueError("Missing book:", doc.doc_id[0])
+            warnings.warn("Missing book: {}".format(doc.doc_id[0]))
 
     # add refs
     old, new = Collection(old_books), Collection(new_books)
@@ -93,7 +94,7 @@ def load_vulgate(path='texts/vulgate.csv',
     return old, new, refs
 
 
-def load_blb_refs(path='texts/blb.refs.json'):
+def load_blb_refs(path='data/texts/blb.refs.json'):
     with open(path) as f:
         return [{'source': [decode_ref(s_ref) for s_ref in ref['source']],
                  'target': [decode_ref(t_ref) for t_ref in ref['target']],
@@ -124,7 +125,11 @@ def read_doc(path, fields=('token', 'pos', '_', 'lemma')):
 
 def read_refs(path):
     with open(path) as f:
-        return json.load(f)
+        output = []
+        for ref in json.load(f):
+            ref['target'] = list(map(tuple, ref['target']))
+            output.append(ref)
+        return output
 
 
 def shingle_doc(doc, f_id, overlap=10, window=20):
@@ -136,28 +141,32 @@ def shingle_doc(doc, f_id, overlap=10, window=20):
         # prepare doc
         fields = {key: vals[start:stop] for key, vals in doc.items()}
         fields['ids'] = list(range(start, stop))
+
         shingled_docs.append(Doc(fields=fields, doc_id=doc_id))
 
     return shingled_docs
 
 
-def load_bernard(directory='texts/bernard', bible_path='texts/vulgate.csv', **kwargs):
+def load_bernard(directory='data/texts/bernard',
+                 bible_path='data/texts/vulgate.csv',
+                 **kwargs):
+
     bible = Collection(read_bible(bible_path))
     shingled_docs, shingled_refs = [], []
     for path in glob.glob(os.path.join(directory, '*.txt')):
-        doc = read_doc(path, fields=('w_id', 'token', 'pos', '_', 'lemma'))
         refs = read_refs(path.replace('.txt', '.refs.json'))
-        for r in refs:
+        doc = read_doc(path, fields=('w_id', 'token', 'pos', '_', 'lemma'))
+        shingles = shingle_doc(doc, path, **kwargs)
+        for ref in refs:
             source = []
-            for idx, subdoc in enumerate(shingle_doc(doc, path, **kwargs)):
-                if set(r['target']).intersection(set(doc.fields['ids'])):
-                    source.append(idx)
-            if not source:
-                print("missing ref")
-                continue
-            target = [bible.get_doc_idx(decode_ref(v_id)) for v_id in r['target']]
-            shingled_refs.append(Ref(tuple(source), tuple(target), meta=r))
-            shingled_docs.append(subdoc)
+            for shingle in shingles:
+                if set(ref['source']).intersection(set(shingle.fields['ids'])):
+                    source.append(shingle.doc_id)
+            if source:
+                target = ref['target']
+                shingled_refs.append(Ref(tuple(source), tuple(target), meta=ref))
+
+        shingled_docs.extend(shingles)
 
     shingled_docs = Collection(shingled_docs)
 

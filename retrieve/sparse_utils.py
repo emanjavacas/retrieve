@@ -121,20 +121,20 @@ def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=Fals
     >>> X[2, 4] = 0.25
     >>> X[7, 1] = 0.75
     >>> X[8, 7] = 0.15
+    >>> X = X.tocsr()
     >>> set_threshold(X, 0.1, copy=True).nnz
     4
     >>> set_threshold(X, 0.3, copy=True).nnz
-    3
+    2
     >>> set_threshold(X, 0.8, copy=True).nnz
     0
-    >>> _ = set_threshold(X, 0.5)
-    >>> X.nnz
+    >>> set_threshold(X, 0.5).nnz
     2
     >>> X_orig = X.copy()
-    >>> set_threshold(X, 0.6, copy=True)
+    >>> _ = set_threshold(X, 0.6, copy=True)
     >>> (X != X_orig).nnz
     0
-    >>> set_threshold(X, 0.6, copy=False)
+    >>> _ = set_threshold(X, 0.6, copy=False)
     >>> (X != X_orig).nnz > 0
     True
     """
@@ -148,8 +148,8 @@ def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=Fals
             X2[i, j] = X[i, j]
         return sparse_matrix(X2)
 
-    if isinstance(X, scipy.sparse.lil_matrix):
-        raise ValueError("Cannot efficiently drop items on lil_matrix")
+    if isinstance(X, (scipy.sparse.lil_matrix, scipy.sparse.dok_matrix)):
+        raise ValueError("Cannot efficiently drop items on", str(type(X)))
 
     X.data[np.abs(X.data) < threshold] = 0.0
     X.eliminate_zeros()

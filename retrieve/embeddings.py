@@ -177,6 +177,31 @@ def train_gensim_embeddings():
     pass
 
 
+def export_fasttext_embeddings(path, vocab, output_path=None):
+    try:
+        import fastText
+    except ModuleNotFoundError:
+        raise ValueError("Couldn't import `fastText` module")
+
+    model = fastText.load(path)
+    keys, vectors = {}, []
+    for idx, word in enumerate(vocab):
+        keys[word] = idx
+        vectors.append(model.get_word_vector(word))
+
+    if output_path is not None:
+        with open(output_path) as f:
+            for word in keys:
+                vec = ["{:.6}".format(i) for i in vectors[keys[word]].tolist()]
+                f.write(word + '\t' + ' '.join(vec) + '\n')
+
+    return keys, vectors
+
+
+def evaluate_embeddings(eval_path):
+    pass
+
+
 if __name__ == '__main__':
     embs = Embeddings.from_csv('latin.lemma.embeddings')
     keys = ['anima', 'caput', 'manus']

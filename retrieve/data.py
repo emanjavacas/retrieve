@@ -77,7 +77,7 @@ class Doc:
 
     def __repr__(self):
         return '<Doc doc_id={} text="{}"/>'.format(
-            str(self.doc_id), self.to_text()[:30] + "...")
+            str(self.doc_id), ' '.join(self.text)[:30] + "...")
 
 
 def _wrap_fn(fn, use_counter=False):

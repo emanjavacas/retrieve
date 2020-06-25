@@ -2,12 +2,14 @@
 # import numpy as np
 # import scipy.sparse
 
-# from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
-# from retrieve.corpora import load_vulgate
-# from retrieve.set_similarity import SetSimilarity
-# from retrieve.compare.align import create_embedding_scorer
-# from retrieve.compare import align_collections
-# from retrieve import utils
+from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
+from retrieve.corpora import load_vulgate, load_bernard
+from retrieve.set_similarity import SetSimilarity
+from retrieve.compare.align import create_embedding_scorer
+from retrieve.compare import align_collections
+from retrieve import utils
+
+# bernard, bible, refs = load_bernard()
 
 # # # load data
 # vulg = load_vulgate(include_blb=True)

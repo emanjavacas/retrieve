@@ -29,8 +29,7 @@ def _get_matches_fneg_tpos_at(q_idxs, i_idxs, ranking, at, strict):
                                       i_matches.tolist(),
                                       row_ranks.tolist()):
         # rank should be 1-index
-        rank += 1
-        matches.append((q_match, i_match, rank))
+        matches.append((q_match, i_match, rank + 1))
 
     if strict:
         # how many were strictly retrieved
@@ -88,17 +87,17 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
 
     >>> import numpy as np
     >>> n_queries, n_index = 5, 6
-    >>> ranking = np.zeros((n_queries, n_index)) * np.nan
+    >>> ranking = np.zeros((n_queries, n_index)) - 1
     >>> for i in range(n_queries):
     ...     for j in range(n_index):
     ...         if j < i:
     ...             ranking[i, j] = i + j
     >>> ranking
-    array([[nan, nan, nan, nan, nan, nan],
-           [ 1., nan, nan, nan, nan, nan],
-           [ 2.,  3., nan, nan, nan, nan],
-           [ 3.,  4.,  5., nan, nan, nan],
-           [ 4.,  5.,  6.,  7., nan, nan]])
+    array([[-1., -1., -1., -1., -1., -1.],
+           [ 1., -1., -1., -1., -1., -1.],
+           [ 2.,  3., -1., -1., -1., -1.],
+           [ 3.,  4.,  5., -1., -1., -1.],
+           [ 4.,  5.,  6.,  7., -1., -1.]])
     >>> refs = [([0], [1, 2]), ([2, 3], [3, 5, 6]), ([4], [8])]
     >>> stats, matches = ranking_stats_from_tuples(ranking, refs, at_values=[5])
     >>> len(stats)
@@ -109,18 +108,24 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
     [(2, 3, 2), (3, 3, 1), (3, 5, 3)]
     >>> stats = stats[0]
     >>> stats['tpos'], stats['fneg'], stats['fpos']
-    (1, 2, 0)
+    (1, 2, 2)
     >>> stats, matches = ranking_stats_from_tuples(
     ...     ranking, refs, at_values=[5], strict=True)
     >>> stats = stats[0]
     >>> stats['tpos'], stats['fneg'], stats['fpos']
-    (3, 6, 0)
+    (3, 6, 2)
     """
-    matches, checked = [], []
+    # >>> refs = [([0], [1, 2]), ([2, 3], [3, 5, 6]), ([4], [8])]
+    # >>> array([[-1,  -1,  -1,  -1,  -1, -1],  # fneg
+    #            [ 1., -1,  -1,  -1,  -1, -1],  # fpos
+    #            [ 2.,  3., -1,  -1,  -1, -1],  # tpos
+    #            [ 3.,  4.,  5., -1,  -1, -1],  # (tpos already checked)
+    #            [ 4.,  5.,  6.,  7., -1, -1]]) # fneg & fpos
+    matches = []
     stats = [collections.Counter() for _ in at_values]
+    checked = collections.defaultdict(list)
 
     for q_idxs, i_idxs in refs:
-        checked.extend(q_idxs)
         q_idxs, i_idxs = np.array(q_idxs), np.array(i_idxs)
         for idx_at, at in enumerate(sorted(at_values)):
             row_matches, tpos, fneg = _get_matches_fneg_tpos_at(
@@ -133,11 +138,14 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
             if at == max(at_values):
                 matches.extend(row_matches)
 
+            if row_matches:
+                row_checked, _, _ = zip(*row_matches)
+                checked[at].extend(row_checked)
+
     # false positives
-    checked = np.array(list(set(checked)))  # avoid duplicates
-    unchecked = np.arange(len(ranking))
-    unchecked = unchecked[np.isin(unchecked, checked, invert=True)]
     for idx, at in enumerate(sorted(at_values)):
+        unchecked = np.arange(len(ranking))
+        unchecked = unchecked[np.isin(unchecked, np.array(checked[at]), invert=True)]
         stats[idx]['fpos'] += _get_fpos_at(unchecked, ranking, at)
 
     return stats, matches

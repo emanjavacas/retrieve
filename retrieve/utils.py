@@ -57,11 +57,11 @@ def load_freqs(path, top_k=0):
 
 
 @contextlib.contextmanager
-def timer(print_on_leave=True, desc='', fmt='took {:.2} secs in total', **kwargs):
+def timer(print_on_leave=True, desc='', fmt='took {:0.1f} secs in total', **kwargs):
 
     start = last = time.time()
 
-    def time_so_far(desc='', fmt='took {:.2} secs', **kwargs):
+    def time_so_far(desc='', fmt='took {:0.1f} secs', **kwargs):
         nonlocal last
         desc = ' - ' + (desc + ' ' if desc else desc)
         print(desc + fmt.format(time.time() - last), **kwargs)
