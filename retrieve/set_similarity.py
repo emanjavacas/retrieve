@@ -1,11 +1,14 @@
 
 
+import logging
 import multiprocessing as mp
 
 from scipy.sparse import dok_matrix
 from tqdm import tqdm
 
 from retrieve.compare import SearchIndex
+
+logger = logging.getLogger(__name__)
 
 
 def containment(s1, s2, **kwargs):
@@ -95,6 +98,7 @@ class SetSimilarity:
         sims = dok_matrix((len(queries), len(index)))
 
         processes = mp.cpu_count() if processes < 0 else processes
+        logger.info("Using {} cpus".format(processes))
         if processes == 1:
             for idx in tqdm(range(len(queries)), total=len(queries),
                             desc="Set similarity: {}".format(self.similarity_fn)):
