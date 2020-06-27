@@ -1,15 +1,23 @@
 
 import time
 import contextlib
+import itertools
 
 
-def get_ngrams(s, min_n=1, max_n=1, sep='--'):
+def get_ngrams(s, min_n=1, max_n=1, sep='--', skip_k=0):
     """
-    N-gram generator over input sequence. Allows multiple n-gram orders at once.
+    N-gram generator over input sequence. Allows multiple n-gram orders at once
+    as well as skip-grams
     """
     for n in range(min_n, max_n + 1):
-        for ngram in zip(*[s[i:] for i in range(n)]):
-            yield sep.join(ngram)
+        if skip_k and n > 1:
+            for ngram in zip(*[s[i:] for i in range(n + skip_k)]):
+                first, rest = ngram[:1], ngram[1:]
+                for tail in itertools.combinations(rest, n - 1):
+                    yield sep.join(first + tail)
+        else:
+            for ngram in zip(*[s[i:] for i in range(n)]):
+                yield sep.join(ngram)
 
 
 def chunks(it, size):

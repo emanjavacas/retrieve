@@ -222,7 +222,12 @@ class TextPreprocessor:
         # regexes
         self.field_regexes = field_regexes
 
-    def process(self, doc, verbose=False, min_n=1, max_n=1):
+    def process(self, doc, verbose=False, **kwargs):
+        """
+        Process input text creating n-grams on the processed output.
+
+        kwargs : get_ngrams additional arguments
+        """
         filtered = []
 
         for i in range(len(doc.fields['token'])):
@@ -263,7 +268,7 @@ class TextPreprocessor:
 
             filtered.append(target)
 
-        return list(utils.get_ngrams(filtered, min_n=min_n, max_n=max_n))
+        return list(utils.get_ngrams(filtered, **kwargs))
 
     def process_collections(self, *colls, **kwargs):
         for coll in colls:
