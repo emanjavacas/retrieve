@@ -26,12 +26,8 @@ def add_handler_level(level=logging.DEBUG):
     logger.setLevel(level)
 
 
-def enable_debug_log():
-    add_handler_level()
-
-
-def disable_debug_log():
-    add_handler_level("INFO")
+def enable_log_level(level=logging.DEBUG):
+    add_handler_level(level=level)
 
 
 from . import utils

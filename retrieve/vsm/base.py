@@ -1,12 +1,10 @@
 
 import inspect
 
-from sklearn.metrics.pairwise import pairwise_kernels
-import scipy.sparse
 import tqdm
 
+from retrieve.compare.pairwise_chunked import pairwise_kernels_chunked
 from retrieve.compare import soft_cosine_similarities
-from retrieve.sparse_utils import sparse_chunks, set_threshold
 
 
 def init_sklearn_vectorizer(vectorizer, vocab=None, **kwargs):
@@ -58,26 +56,9 @@ class VSM:
         transform = self.transform(queries + index)
         queries, index = transform[:len(queries)], transform[len(queries):]
 
-        if chunk_size > 0:
-            (n, _), (m, _) = queries.shape, index.shape
-            sims = scipy.sparse.lil_matrix((n, m))
-            n_chunks = n // chunk_size
-            for (i_start, i_stop), Q in tqdm.tqdm(sparse_chunks(queries, chunk_size),
-                                                  total=n_chunks,
-                                                  desc='Chunked similarities',
-                                                  disable=disable_bar):
-                Q_sims = pairwise_kernels(Q, index, metric=metric, n_jobs=-1)
-                if threshold > 0:
-                    Q_sims = set_threshold(Q_sims, threshold)
-                    sims[i_start: i_stop, :] = Q_sims
-
-        else:
-            sims = pairwise_kernels(queries, index, metric=metric, n_jobs=-1)
-            if threshold > 0.0:
-                sims = set_threshold(sims, threshold)
-
-        if scipy.sparse.isspmatrix_lil(sims):
-            sims = sims.tocsr()
+        sims = pairwise_kernels_chunked(
+            queries, index, metric=metric, chunk_size=chunk_size,
+            desc='Chunked similarities', disable_bar=disable_bar)
 
         return sims
 
@@ -109,8 +90,8 @@ class VSMSoftCosine(VSM):
         index, queries = list(index), list(queries)
         transform = self.transform(index + queries)
         index, queries = transform[:len(index)], transform[len(index):]
-        S = embs.get_S(words=self.vectorizer.get_feature_names(),
-                       fill_missing=True, **kwargs)
+        S = embs.get_S(
+            words=self.vectorizer.get_feature_names(), fill_missing=True, **kwargs)
         sims = soft_cosine_similarities(
             queries, index, S, chunk_size=chunk_size, threshold=threshold,
             disable_bar=disable_bar)

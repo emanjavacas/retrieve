@@ -1,22 +1,37 @@
 
 import csv
+import logging
 
 import pandas as pd
 import numpy as np
 import scipy.sparse
-from sklearn.metrics.pairwise import pairwise_distances, pairwise_kernels
 
+from retrieve.compare.pairwise_chunked import pairwise_kernels_chunked
 from retrieve.sparse_utils import set_threshold
 
 
+logger = logging.getLogger(__name__)
+
+
 def load_embeddings(path, vocab=None):
+    # handle word2vec format
+    skiprows = 0
+    with open(path) as f:
+        if len(next(f).strip().split()) == 2:
+            skiprows = 1
+
     embs = pd.read_csv(
-        path, sep=" ", header=None, index_col=0, skiprows=0, quoting=csv.QUOTE_NONE)
+        path, sep=" ", header=None,
+        index_col=0, skiprows=skiprows, quoting=csv.QUOTE_NONE)
     embs = embs.dropna(axis=1, how='all')
     embs = embs.T
+
     if vocab is not None:
         # drop words not in vocab
-        embs.drop(embs.columns.difference(vocab), 1, inplace=True)
+        missing = embs.columns.difference(vocab)
+        logger.debug("Dropping {} words from vocabulary".format(len(missing)))
+        embs.drop(missing, 1, inplace=True)
+
     return embs
 
 
@@ -49,7 +64,7 @@ class Embeddings:
 
     def get_vectors(self, keys):
         targets = [w for w in keys if w in self.word2id]
-        return targets, np.array(self[w] for w in targets)
+        return targets, np.array(list(map(self.__getitem__, targets)))
 
     def default_vector(self):
         return np.mean(self.vectors, 0)
@@ -84,8 +99,7 @@ class Embeddings:
         return keys, indices
 
     def get_S(self, words=None, fill_missing=False,
-              metric='cosine',
-              beta=1, cutoff=0.0):
+              metric='cosine', beta=1, cutoff=0.0, chunk_size=0):
         """
         Arguments
         =========
@@ -113,7 +127,8 @@ class Embeddings:
         >>> S[1, 3] == 0.0      # missing words evaluate to one-hot vectors
         True
         >>> w1, w2 = embs['a'], embs['c']
-        >>> S[0, 2] == np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        >>> sim = np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        >>> np.allclose(S[0, 2], sim)
         True
         >>> S[2, 0] == S[0, 2]
         True
@@ -123,7 +138,8 @@ class Embeddings:
         >>> S.shape             # only words in space (fill_missing=False)
         (2, 2)
         >>> w1, w2 = embs['a'], embs['c']
-        >>> S[0, 1] == np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        >>> sim = np.dot(w1, w2)/(np.linalg.norm(w1) * np.linalg.norm(w2))
+        >>> np.allclose(S[0, 1], sim)
         True
         """
         if fill_missing and not words:
@@ -133,10 +149,10 @@ class Embeddings:
         if not keys:
             raise ValueError("Couldn't find any of the requested words")
 
-        S = pairwise_kernels(self.vectors[indices], metric=metric)
+        S = pairwise_kernels_chunked(
+            self.vectors[indices], metric=metric, chunk_size=chunk_size)
         # apply modifications on S
         S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
-
         # drop elements
         if cutoff > 0.0:
             S = set_threshold(S, cutoff)
@@ -159,22 +175,30 @@ class Embeddings:
 
     def nearest_neighbours(self, words, metric='cosine', n=10, **kwargs):
         keys, index = self.get_indices(words)
-        D = pairwise_distances(
+        S = pairwise_kernels_chunked(
             self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
         # get neighbours
-        neighs = np.argsort(D, axis=1)[:, 1: n+1]
+        neighs = np.argsort(-S, axis=1)[:, 1: n+1]
         # get distances
-        D = D[np.arange(len(keys)).repeat(n), np.ravel(neighs)]
-        D = D.reshape(len(keys), -1)
+        S = S[np.arange(len(keys)).repeat(n), np.ravel(neighs)]
+        S = S.reshape(len(keys), -1)
         # human form
-        neighs = [{self.id2word[neighs[i, j]]: D[i, j] for j in range(n)}
+        neighs = [{self.id2word[neighs[i, j]]: S[i, j] for j in range(n)}
                   for i in range(len(keys))]
 
         return keys, neighs
 
 
-def train_gensim_embeddings():
-    pass
+def train_gensim_embeddings(path, output_path=None, **kwargs):
+    from gensim.models import Word2Vec
+    from gensim.models.word2vec import LineSentence
+    from retrieve import enable_log_level
+
+    m = Word2Vec(sentences=LineSentence(path), **kwargs)
+    if output_path:
+        m.wv.save_word2vec_format(output_path)
+
+    return m
 
 
 def export_fasttext_embeddings(path, vocab, output_path=None):
@@ -190,7 +214,7 @@ def export_fasttext_embeddings(path, vocab, output_path=None):
         vectors.append(model.get_word_vector(word))
 
     if output_path is not None:
-        with open(output_path) as f:
+        with open(output_path, 'w+') as f:
             for word in keys:
                 vec = ["{:.6}".format(i) for i in vectors[keys[word]].tolist()]
                 f.write(word + '\t' + ' '.join(vec) + '\n')
@@ -202,11 +226,82 @@ def evaluate_embeddings(eval_path):
     pass
 
 
+def cscl(X, Y, chunk_size):
+    pass
+
+
+def standard_nn(X, Z, batch_size):
+    # translation = collections.defaultdict(int)
+    # for i in range(0, len(src), BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, len(src))
+    #     similarities = x[src[i:j]].dot(z.T)
+    #     nn = similarities.argmax(axis=1).tolist()
+    #     for k in range(j-i):
+    #         translation[src[i+k]] = nn[k]
+    pass
+
+
+def invnn(X, Z):
+    # translation = collections.defaultdict(int)
+    # best_rank = np.full(len(src), x.shape[0], dtype=int)
+    # best_sim = np.full(len(src), -100, dtype=dtype)
+    # for i in range(0, z.shape[0], BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, z.shape[0])
+    #     similarities = z[i:j].dot(x.T)
+    #     ind = (-similarities).argsort(axis=1)
+    #     ranks = asnumpy(ind.argsort(axis=1)[:, src])
+    #     sims = asnumpy(similarities[:, src])
+    #     for k in range(i, j):
+    #         for l in range(len(src)):
+    #             rank = ranks[k-i, l]
+    #             sim = sims[k-i, l]
+    #             if rank < best_rank[l] or (rank == best_rank[l] and sim > best_sim[l]):
+    #                 best_rank[l] = rank
+    #                 best_sim[l] = sim
+    #                 translation[src[l]] = k
+    pass
+
+
+def invsoftmax(X, Z, inv_sample=None):
+    # sample = xp.arange(x.shape[0]) if inv_sample is None else xp.random.randint(0, x.shape[0], inv_sample)
+    # partition = xp.zeros(z.shape[0])
+    # for i in range(0, len(sample), BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, len(sample))
+    #     partition += xp.exp(args.inv_temperature*z.dot(x[sample[i:j]].T)).sum(axis=1)
+    # for i in range(0, len(src), BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, len(src))
+    #     p = xp.exp(args.inv_temperature*x[src[i:j]].dot(z.T)) / partition
+    #     nn = p.argmax(axis=1).tolist()
+    #     for k in range(j-i):
+    #         translation[src[i+k]] = nn[k]
+    pass
+
+
+def csls(X, Z):
+    # knn_sim_bwd = xp.zeros(z.shape[0])
+    # for i in range(0, z.shape[0], BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, z.shape[0])
+    #     knn_sim_bwd[i:j] = topk_mean(z[i:j].dot(x.T), k=args.neighborhood, inplace=True)
+    # for i in range(0, len(src), BATCH_SIZE):
+    #     j = min(i + BATCH_SIZE, len(src))
+    #     similarities = 2*x[src[i:j]].dot(z.T) - knn_sim_bwd  # Equivalent to the real CSLS scores for NN
+    #     nn = similarities.argmax(axis=1).tolist()
+    #     for k in range(j-i):
+    #         translation[src[i+k]] = nn[k]
+    pass
+
+
 if __name__ == '__main__':
-    embs = Embeddings.from_csv('latin.lemma.embeddings')
-    keys = ['anima', 'caput', 'manus']
-    metric = 'cosine'
-    n = 10
-    nn_keys, neighs = embs.nearest_neighbours(keys, metric='euclidean')
-    S = pairwise_distances(embs.vectors[:100], metric='cosine')
-    D = pairwise_kernels(embs.vectors[:100], metric='cosine')
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument('input')
+    parser.add_argument('--output')
+    parser.add_argument('--size', type=int, default=100)
+    parser.add_argument('--window', type=int, default=5)
+    parser.add_argument('--min_count', type=int, default=1)
+    parser.add_argument('--workers', type=int, default=4)
+    args = parser.parse_args()
+
+    m = train_gensim_embeddings(args.input, output_path=args.output,
+                                size=args.size, window=args.window,
+                                min_count=args.min_count, workers=args.workers)
