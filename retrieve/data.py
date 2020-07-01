@@ -434,7 +434,7 @@ if __name__ == '__main__':
     from retrieve.corpora import load_vulgate
 
     collection = load_vulgate()
-    stops = utils.load_stopwords('all.stop')
+    stops = utils.load_stopwords('data/stop/latin.stop')
     processor = TextPreprocessor(stopwords=stops, field_regexes={'token': '[a-z]+'})
     start = time.time()
     processor.process_collections(collection)

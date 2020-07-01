@@ -99,7 +99,7 @@ if __name__ == '__main__':
     vulg = load_vulgate(include_blb=True)
     # preprocess
     TextPreprocessor(
-        stopwords=utils.load_stopwords('all.stop')
+        stopwords=utils.load_stopwords('data/stop/latin.stop')
     ).process_collections(vulg, min_n=1, max_n=1)
     # drop features and get vocabulary
     fsel = FeatureSelector(vulg)
