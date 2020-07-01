@@ -6,7 +6,7 @@ import pandas as pd
 import numpy as np
 import scipy.sparse
 
-from retrieve.compare.pairwise_chunked import pairwise_kernels_chunked
+from retrieve.methods import pairwise_kernels_chunked
 from retrieve.sparse_utils import set_threshold
 
 

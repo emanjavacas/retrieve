@@ -6,7 +6,7 @@ import multiprocessing as mp
 from scipy.sparse import dok_matrix
 from tqdm import tqdm
 
-from retrieve.compare import SearchIndex
+from .search_index import SearchIndex
 
 logger = logging.getLogger(__name__)
 

@@ -4,7 +4,7 @@ import numpy as np
 import pyemd
 
 
-def get_histograms(s1, s2, w2i):
+def get_wmd_histograms(s1, s2, w2i):
     w1, weights1 = zip(*[(w2i[w], c) for w, c in collections.Counter(s1).most_common()
                          if w in w2i])
     w2, weights2 = zip(*[(w2i[w], c) for w, c in collections.Counter(s2).most_common()
@@ -19,12 +19,12 @@ def get_histograms(s1, s2, w2i):
     return h1, h2, np.array(words)
 
 
-def wmd(s1, s2, dists, w2i, get_flow=False):
+def get_wmd(s1, s2, dists, w2i, get_flow=False):
     """
     Get WMD for two input sentences
     """
     s1, s2 = s1.split(), s2.split()
-    h1, h2, words = get_histograms(s1, s2, w2i)
+    h1, h2, words = get_wmd_histograms(s1, s2, w2i)
     D = dists[np.ix_(words, words)]
 
     if get_flow:

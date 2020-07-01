@@ -7,7 +7,7 @@ import scipy.sparse
 from retrieve.corpora import load_vulgate
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
 from retrieve import sparse_utils
-from retrieve.set_similarity import SetSimilarity
+from retrieve.methods.set_similarity import SetSimilarity
 
 
 class TestSparse(unittest.TestCase):
@@ -16,8 +16,9 @@ class TestSparse(unittest.TestCase):
         TextPreprocessor().process_collections(old, new, min_n=2, max_n=4)
         FeatureSelector(old, new).filter_collections(
             old, new, criterion=(Criterion.DF >= 2) & (Criterion.FREQ >= 5))
-        self.old = old.get_features(cast=set)
-        self.new = new.get_features(cast=set)
+        # speed up testing
+        self.old = old.get_features(cast=set)[:1000]
+        self.new = new.get_features(cast=set)[:1000]
 
     def test_threshold(self):
         for fn in ["containment", "jaccard", "containment_min"]:

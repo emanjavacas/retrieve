@@ -6,7 +6,7 @@ import scipy.sparse
 
 import tqdm
 
-from retrieve.sparse_utils import sparse_chunks, set_threshold
+from ...sparse_utils import sparse_chunks, set_threshold
 
 
 def soft_cosine_simple(query, index, S):
@@ -93,7 +93,7 @@ if __name__ == '__main__':
     from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
     from retrieve import utils
     from retrieve.embeddings import Embeddings
-    from retrieve.vsm.lexical import Tfidf
+    from retrieve.methods import Tfidf
 
     # load
     vulg = load_vulgate(include_blb=True)

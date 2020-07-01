@@ -10,10 +10,10 @@ from dataclasses import dataclass
 
 import numpy as np
 
-from retrieve.set_similarity import (jaccard, containment,
-                                     weighted_containment, weighted_jaccard)
 from retrieve import utils
-from retrieve.compare.align import local_alignment, get_horizontal_alignment
+from retrieve.methods import (jaccard, containment,
+                              weighted_containment, weighted_jaccard)
+from retrieve.methods import local_alignment, get_horizontal_alignment
 
 logger = logging.getLogger(__name__)
 
@@ -427,24 +427,3 @@ class FeatureSelector:
         vocab = self.get_vocab(criterion)
         for text in texts:
             yield [ft for ft in text if ft in vocab]
-
-
-if __name__ == '__main__':
-    import time
-    from retrieve.corpora import load_vulgate
-
-    collection = load_vulgate()
-    stops = utils.load_stopwords('data/stop/latin.stop')
-    processor = TextPreprocessor(stopwords=stops, field_regexes={'token': '[a-z]+'})
-    start = time.time()
-    processor.process_collections(collection)
-    print(time.time() - start)
-    fsel = FeatureSelector(collection)
-    fsel.get_vocab((0.5 <= Criterion.FREQ <= 0.95))
-    fsel.get_vocab(Criterion.FREQ >= 0.95)
-
-    # test threshold
-    for th_min, th_max in zip(range(1, 1000, 100), range(100, 10000, 1000)):
-        vocab = fsel.get_vocab(th_min <= Criterion.DF < th_max)
-        assert all([fsel.dfs[fsel.features[ft]] >= th_min for ft in vocab])
-        assert all([fsel.dfs[fsel.features[ft]] < th_max for ft in vocab])

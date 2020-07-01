@@ -1,11 +1,17 @@
 
+import tqdm
 import scipy.sparse
 from sklearn.metrics.pairwise import pairwise_kernels
-from retrieve.sparse_utils import sparse_chunks, set_threshold
+
+from ..sparse_utils import sparse_chunks, set_threshold
 
 
 def pairwise_kernels_chunked(X, Y=None, metric='linear', chunk_size=0,
                              desc=None, disable_bar=True, threshold=0, n_jobs=-1):
+    """
+    Chunked version of pairwise_kernels that applies thresholds to produce
+    sparse similarity matrices
+    """
     if Y is None:
         Y = X
 
@@ -28,4 +34,4 @@ def pairwise_kernels_chunked(X, Y=None, metric='linear', chunk_size=0,
     if scipy.sparse.isspmatrix_lil(sims):
         sims = sims.tocsr()
 
-    return sims    
+    return sims

@@ -259,13 +259,3 @@ def local_alignment(s1, s2, scorer=ConstantScorer(),
 
     fn = get_local_alignment_cython if impl == 'cython' else get_local_alignment_numba
     return fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap)
-
-
-if __name__ == '__main__':
-    s1 = 'AGCACACA'
-    s2 = 'ACACACTA'
-    assert local_alignment(s1, s2) == local_alignment(s1, s2, impl='numba')
-
-    s1 = "ATAGACGACATACAGACAGCATACAGACAGCATACAGA"
-    s2 = "TTTAGCATGCGCATATCAGCAATACAGACAGATACG"
-    assert local_alignment(s1, s2) == local_alignment(s1, s2, impl='numba')

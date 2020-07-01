@@ -1,10 +1,12 @@
 
 """
 Modification from https://github.com/ekzhu/SetSimilaritySearch
+LICENSE: https://raw.githubusercontent.com/ekzhu/SetSimilaritySearch/master/LICENSE
 """
 
 import logging
 from collections import defaultdict, deque
+
 import numpy as np
 
 from SetSimilaritySearch.utils import _frequency_order_transform, \

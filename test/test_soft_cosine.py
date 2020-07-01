@@ -7,9 +7,8 @@ import scipy.sparse
 from retrieve.corpora import load_vulgate
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
 from retrieve.embeddings import Embeddings
-from retrieve.vsm.lexical import Tfidf
-
-from retrieve.compare import soft_cosine_similarities, soft_cosine_simple
+from retrieve.methods import Tfidf
+from retrieve.methods.vsm.soft_cosine import soft_cosine_similarities, soft_cosine_simple
 
 from sklearn.metrics import pairwise_kernels
 

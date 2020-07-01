@@ -58,8 +58,7 @@ if __name__ == '__main__':
     from retrieve.corpora import load_vulgate
     from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
     from retrieve.embeddings import Embeddings
-    from retrieve.compare.align import create_embedding_scorer
-    from retrieve.set_similarity import SetSimilarity
+    from retrieve.methods import create_embedding_scorer, SetSimilarity
 
     # load
     vulg = load_vulgate(max_verses=1000)

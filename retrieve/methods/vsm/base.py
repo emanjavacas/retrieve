@@ -1,10 +1,7 @@
 
 import inspect
 
-import tqdm
-
-from retrieve.compare.pairwise_chunked import pairwise_kernels_chunked
-from retrieve.compare import soft_cosine_similarities
+from .soft_cosine import soft_cosine_similarities
 
 
 def init_sklearn_vectorizer(vectorizer, vocab=None, **kwargs):
@@ -52,6 +49,8 @@ class VSM:
             In combination with a certain `threshold`, this will allow to fit
             the whole (sparse) similarity matrix in memory
         """
+        from retrieve.methods import pairwise_kernels_chunked
+
         index, queries = list(index), list(queries)
         transform = self.transform(queries + index)
         queries, index = transform[:len(queries)], transform[len(queries):]
