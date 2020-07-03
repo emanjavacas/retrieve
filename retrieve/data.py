@@ -1,4 +1,5 @@
 
+import uuid
 import functools
 import operator
 import collections
@@ -105,9 +106,11 @@ class Collection:
     =========
     docs : list of Doc
     """
-    def __init__(self, docs):
+    def __init__(self, docs, name=None):
         self._docs = docs
         self._doc_ids = {doc.doc_id: idx for idx, doc in enumerate(docs)}
+        # identifier for collection
+        self.name = name or str(uuid.uuid4())[:8]
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -142,7 +145,7 @@ class Collection:
                 continue
             yield doc
 
-    def get_nonempty_features(self, cast=None):
+    def get_nonempty_features(self, **kwargs):
         """
         Avoid getting empty bags of features. Documents might
         be empty after preprocessing or feature selection.
@@ -154,7 +157,7 @@ class Collection:
             index, list of indices mapping the document idx in the original collection
         """
         output, index = [], []
-        for idx, feats in enumerate(self.get_features(cast=cast)):
+        for idx, feats in enumerate(self.get_features(**kwargs)):
             # handle empty documents
             if feats:
                 output.append(feats)
@@ -162,7 +165,7 @@ class Collection:
 
         return output, index
 
-    def get_features(self, cast=None):
+    def get_features(self, cast=None, min_features=0):
         """
         Get preprocessed text.
 
@@ -180,6 +183,9 @@ class Collection:
             feats = doc.features
             if cast is not None:
                 feats = cast(feats)
+            # empty input if number of features falls below threshold
+            if min_features > 0 and len(feats) < min_features:
+                feats = cast([])
             output.append(feats)
         return output
 
