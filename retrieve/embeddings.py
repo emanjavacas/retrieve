@@ -150,7 +150,8 @@ class Embeddings:
             raise ValueError("Couldn't find any of the requested words")
 
         S = pairwise_kernels_chunked(
-            self.vectors[indices], metric=metric, chunk_size=chunk_size)
+            self.vectors[indices], metric=metric, chunk_size=chunk_size,
+            dense_output=False)
         # apply modifications on S
         S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
         # drop elements
