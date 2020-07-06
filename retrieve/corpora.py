@@ -150,7 +150,8 @@ def read_refs(path):
 def shingle_doc(doc, f_id, overlap=10, window=20):
     shingled_docs = []
     for start in range(0, len(next(iter(doc.values()))), window - overlap):
-        stop = start + window
+        # doc might be smaller than window
+        stop = min(start + window, len(doc['token'][start:]))
         # doc id
         doc_id = f_id, (start, stop)
         # prepare doc

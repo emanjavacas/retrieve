@@ -76,11 +76,11 @@ class VisualizerApp:
         return {'doc1': {'left': ' '.join(d.text for d in doc1l),
                          'right': ' '.join(d.text for d in doc1r),
                          'text': doc1.text, 'match': doc1ids,
-                         'id': ' '.join(doc1.doc_id)},
+                         'id': doc1.get_printable_doc_id()},
                 'doc2': {'left': ' '.join(d.text for d in doc2l),
                          'right': ' '.join(d.text for d in doc2r),
                          'text': doc2.text, 'match': doc2ids,
-                         'id': ' '.join(doc2.doc_id)}}
+                         'id': doc2.get_printable_doc_id()}}
 
     def heatmap(self):
         rows, cols, vals = scipy.sparse.find(self.sims)
@@ -89,8 +89,8 @@ class VisualizerApp:
         max_sim = float(self.sims.max()) if self.max_sim is None else self.max_sim
         data = {'points': [{'row': row,
                             'col': col,
-                            'row_id': ' '.join(self.coll1[row].doc_id),
-                            'col_id': ' '.join(self.coll2[col].doc_id),
+                            'row_id': self.coll1[row].get_printable_doc_id(),
+                            'col_id': self.coll2[col].get_printable_doc_id(),
                             'sim': val} for row, col, val in matches],
                 'nrow': len(self.coll1),
                 'ncol': len(self.coll2),

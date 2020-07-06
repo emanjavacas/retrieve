@@ -1,4 +1,5 @@
 
+import itertools
 import uuid
 import functools
 import operator
@@ -28,6 +29,25 @@ class Ref:
     source: Tuple[Any]
     target: Tuple[Any]
     meta: tuple = ()
+
+
+def printable_doc_id(doc_id, levels=('-', ':', '+')):
+    def _printable_doc_id(doc_id, level):
+        if isinstance(doc_id, (list, tuple)):
+            for it in doc_id:
+                yield from _printable_doc_id(it, level + 1)
+        else:
+            yield level, str(doc_id)
+
+    last, output, groups = None, None, list(_printable_doc_id(doc_id, -1))
+    for level, group in itertools.groupby(groups, key=lambda tup: tup[0]):
+        group = levels[level].join(it for _, it in group)
+        if output is None:
+            output = group
+        else:
+            output = levels[min(level, last)].join([output, group])
+        last = level
+    return output
 
 
 class Doc:
@@ -78,6 +98,9 @@ class Doc:
     @property
     def text(self):
         return ' '.join(self.get_features(field='token'))
+
+    def get_printable_doc_id(self):
+        return printable_doc_id(self.doc_id)
 
     def to_counter(self, field=None):
         return collections.Counter(self.get_features(field=field))

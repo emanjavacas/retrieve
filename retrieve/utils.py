@@ -2,7 +2,6 @@
 import time
 import contextlib
 import itertools
-import functools
 import unicodedata
 
 
