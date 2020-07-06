@@ -44,7 +44,10 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
                     "Expected {} metadata fields, but got {}. File: {}"
                     .format(len(fields), len(data), path))
             doc_id = book, chapter, verse
-            docs.append(Doc(fields=dict(zip(fields, data)), doc_id=doc_id))
+            try:
+                docs.append(Doc(fields=dict(zip(fields, data)), doc_id=doc_id))
+            except ValueError:
+                warnings.warn("Ignoring document {}".format(' '.join(doc_id)))
 
     if not sort_docs:
         return docs
@@ -79,7 +82,8 @@ def load_vulgate(path='data/texts/vulgate.csv',
             warnings.warn("Missing book: {}".format(doc.doc_id[0]))
 
     # add refs
-    old, new = Collection(old_books, name='old'), Collection(new_books, name='new')
+    old = Collection(old_books, name='Old Testament')
+    new = Collection(new_books, name='New Testament')
     if not include_blb:
         return old, new
 
@@ -162,7 +166,7 @@ def load_bernard(directory='data/texts/bernard',
                  bible_path='data/texts/vulgate.csv',
                  **kwargs):
 
-    bible = Collection(read_bible(bible_path), name='vulgate')
+    bible = Collection(read_bible(bible_path), name='Vulgate')
     shingled_docs, shingled_refs = [], []
     for path in glob.glob(os.path.join(directory, '*.txt')):
         refs = read_refs(path.replace('.txt', '.refs.json'))
@@ -179,6 +183,6 @@ def load_bernard(directory='data/texts/bernard',
 
         shingled_docs.extend(shingles)
 
-    shingled_docs = Collection(shingled_docs, name='bernard')
+    shingled_docs = Collection(shingled_docs, name='Bernard')
 
     return shingled_docs, bible, shingled_refs

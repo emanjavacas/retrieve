@@ -48,37 +48,63 @@ class Doc:
     """
     def __init__(self,
                  fields: Dict[str, List[any]],
-                 doc_id: Any):
+                 doc_id: Any,
+                 ignore_fields=set(['_'])):
 
         if isinstance(doc_id, int):
             raise ValueError("Can't use `doc_id` of type integer")
         if 'token' not in fields:
             raise ValueError("`fields` requires 'token' data")
 
-        self.fields = fields
         self.doc_id = doc_id
-        self._features = []
+        self.fields = {f: data for f, data in fields.items() if f not in ignore_fields}
+        # check lengths
+        self._check_fields(self.fields)
+        # data
+        self._features = None
+        self._preprocessed_features = None
+
+    @staticmethod
+    def _check_fields(fields):
+        length = None
+        for field, data in fields.items():
+            if length is None:
+                length = len(data)
+            else:
+                if len(data) != length:
+                    raise ValueError("Expected {} of {} but got {}".format(
+                        length, field, len(data)))
 
     @property
     def text(self):
-        return self.get_features(field='token')
+        return ' '.join(self.get_features(field='token'))
 
     def to_counter(self, field=None):
         return collections.Counter(self.get_features(field=field))
 
+    def __repr__(self):
+        return '<Doc doc_id={} text="{}"/>'.format(
+            str(self.doc_id), self.text[:30] + "...")
+
+    @property
+    def feature_density(self):
+        if self._preprocessed_features == 0:
+            return 0
+        return len(self.get_features()) / self._preprocessed_features
+
+    def set_features(self, features):
+        self._features = features
+        self._preprocessed_features = len(features)
+
     def get_features(self, field=None):
         if not field:
-            if not self.features:
+            if self._features is None:
                 raise ValueError("Unprocessed doc: [{}]".format(str(self.doc_id)))
-            text = self.features
+            text = self._features
         else:
             text = self.fields[field]
 
         return text
-
-    def __repr__(self):
-        return '<Doc doc_id={} text="{}"/>'.format(
-            str(self.doc_id), ' '.join(self.text)[:30] + "...")
 
 
 def _wrap_fn(fn, use_counter=False):
@@ -111,6 +137,9 @@ class Collection:
         self._doc_ids = {doc.doc_id: idx for idx, doc in enumerate(docs)}
         # identifier for collection
         self.name = name or str(uuid.uuid4())[:8]
+        # processing metadata
+        self.preprocesing_summary = None
+        self.fsel_summary = None
 
     def __getitem__(self, idx):
         if isinstance(idx, int):
@@ -165,7 +194,7 @@ class Collection:
 
         return output, index
 
-    def get_features(self, cast=None, min_features=0):
+    def get_features(self, cast=None, min_features=0, min_feature_density=0):
         """
         Get preprocessed text.
 
@@ -180,12 +209,16 @@ class Collection:
         output = []
         for doc in self.get_docs():
             # get features
-            feats = doc.features
+            feats = doc.get_features()
+
+            # empty input if number of features falls below threshold
+            if (min_features > 0 and len(feats) < min_features) or \
+               (min_feature_density > 0 and doc.feature_density > min_feature_density):
+                feats = []
+
             if cast is not None:
                 feats = cast(feats)
-            # empty input if number of features falls below threshold
-            if min_features > 0 and len(feats) < min_features:
-                feats = cast([])
+
             output.append(feats)
         return output
 
@@ -210,7 +243,7 @@ class TextPreprocessor:
                  field_regexes={},
                  drop_punctuation=True, punct_field='token',
                  replace_unk=False, drop_unk=False, unk_token='$unk$', unk_field='token',
-                 stopwords=set(), stop_field='lemma'):
+                 stopwords=None, stop_field='lemma'):
 
         self.field = field
         self.lower = lower
@@ -228,7 +261,26 @@ class TextPreprocessor:
         # regexes
         self.field_regexes = field_regexes
 
-    def process(self, doc, verbose=False, **kwargs):
+    def get_summary(self):
+        return dict({
+            'field': self.field,
+            'lower': self.lower,
+            # punctuation
+            'drop_punctuation': self.drop_punctuation,
+            'punct_field': self.punct_field,
+            # unks
+            'replace_unk': self.replace_unk,
+            'drop_unk': self.drop_unk,
+            'unk_token': self.unk_token,
+            'unk_field': self.unk_field,
+            # stopwords
+            'stopwords': self.stopwords.get_summary() if self.stopwords else None,
+            'stop_field': self.stop_field,
+            # regexes
+            'field_regexes': self.field_regexes
+        })
+
+    def process(self, doc, verbose=False, ngram_extractor=None):
         """
         Process input text creating n-grams on the processed output.
 
@@ -245,7 +297,7 @@ class TextPreprocessor:
                     doc.fields[self.punct_field][i]))
                 continue
 
-            if self.stopwords:
+            if self.stopwords is not None:
                 if doc.fields[self.stop_field][i].lower() in self.stopwords:
                     logger.debug("Dropping stopword: {}".format(
                         doc.fields[self.stop_field][i]))
@@ -274,12 +326,16 @@ class TextPreprocessor:
 
             filtered.append(target)
 
-        return list(utils.get_ngrams(filtered, **kwargs))
+        return ngram_extractor.get_ngrams(filtered)
 
     def process_collections(self, *colls, **kwargs):
+        ngram_extractor = utils.Ngrams(**kwargs)
+        summary = self.get_summary()
+        summary['ngrams'] = ngram_extractor.get_summary()
         for coll in colls:
+            coll.preprocesing_summary = summary
             for doc in coll.get_docs():
-                doc.features = self.process(doc, **kwargs)
+                doc.set_features(self.process(doc, ngram_extractor=ngram_extractor))
 
 
 class MetaCriterion(type):
@@ -311,13 +367,17 @@ class Criterion(object, metaclass=MetaCriterion):
         index, = np.where(operator(stats, val))
         return index
 
+    def get_fields_and_ops(self):
+        # concat current field to extra fields
+        fields = [self.field] + self.fields_
+        ops = [self.ops] + self.ops_
+        return fields, ops
+
     def apply(self, f_sel):
         if not self.ops:
             raise ValueError("Criterion not set until comparison")
 
-        # concat current field to extra fields
-        fields = [self.field] + self.fields_
-        ops = [self.ops] + self.ops_
+        fields, ops = self.get_fields_and_ops()
         stats = {f: f_sel._get_stats(f) for f in set(fields)}
 
         index = []
@@ -408,25 +468,32 @@ class FeatureSelector:
         else:
             raise ValueError("Requested unknown stats")
 
-    def get_vocab(self, criterion=None):
+    def get_vocab(self, criterion=None, return_summary=False):
         if not self.fitted:
             raise ValueError("Selector isn't fitted")
 
         id2ft = {idx: ft for ft, idx in self.features.items()}
 
         if criterion is None:
-            return {id2ft[idx]: self.freqs[idx] for idx in id2ft}
+            vocab = {id2ft[idx]: self.freqs[idx] for idx in id2ft}
 
-        index = criterion.apply(self)
-        index = sorted(index, key=self.freqs.__getitem__, reverse=True)
+        else:
+            index = criterion.apply(self)
+            index = sorted(index, key=self.freqs.__getitem__, reverse=True)
+            vocab = {id2ft[idx]: self.freqs[idx] for idx in index}
 
-        return {id2ft[idx]: self.freqs[idx] for idx in index}
+        if return_summary:
+            return vocab, criterion.get_fields_and_ops() if criterion else None
+
+        return vocab
 
     def filter_collections(self, *colls, criterion=None):
-        vocab = self.get_vocab(criterion)
+        vocab, summary = self.get_vocab(criterion, return_summary=True)
         for coll in colls:
+            coll.fsel_summary = summary
             for doc in coll.get_docs():
-                doc.features = [ft for ft in doc.features if ft in vocab]
+                doc.set_features(list(filter(vocab.get, doc.get_features())))
+
         return vocab
 
     def filter_texts(self, texts, criterion):

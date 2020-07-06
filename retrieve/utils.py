@@ -2,9 +2,32 @@
 import time
 import contextlib
 import itertools
+import functools
+import unicodedata
 
 
-def get_ngrams(s, min_n=1, max_n=1, sep='--', skip_k=0):
+class Ngrams:
+    def __init__(self, min_n=1, max_n=1, skip_k=0, sep='--'):
+        self.min_n = min_n
+        self.max_n = max_n
+        self.skip_k = skip_k
+        self.sep = sep
+
+    def get_summary(self):
+        return (self.min_n, self.max_n, self.skip_k)
+
+    def get_ngrams(self, s):
+        ngrams = []
+        for ngram in get_ngrams(
+                s,
+                min_n=self.min_n,
+                max_n=self.max_n,
+                skip_k=self.skip_k):
+            ngrams.append(self.sep.join(ngram))
+        return ngrams
+
+
+def get_ngrams(s, min_n=1, max_n=1, skip_k=0):
     """
     N-gram generator over input sequence. Allows multiple n-gram orders at once
     as well as skip-grams
@@ -14,10 +37,10 @@ def get_ngrams(s, min_n=1, max_n=1, sep='--', skip_k=0):
             for ngram in zip(*[s[i:] for i in range(n + skip_k)]):
                 first, rest = ngram[:1], ngram[1:]
                 for tail in itertools.combinations(rest, n - 1):
-                    yield sep.join(first + tail)
+                    yield first + tail
         else:
             for ngram in zip(*[s[i:] for i in range(n)]):
-                yield sep.join(ngram)
+                yield ngram
 
 
 def chunks(it, size):
@@ -34,16 +57,41 @@ def chunks(it, size):
         yield buf
 
 
-def load_stopwords(path):
+def drop_string_diacritics(s):
+    return ''.join(c for c in unicodedata.normalize('NFD', s)
+                   if unicodedata.category(c) != 'Mn')
+
+
+class Stopwords:
+    def __init__(self, *paths, drop_diacritics=False):
+        self.words = set()
+        for path in paths:
+            self.words.update(load_stopwords(path, drop_diacritics))
+        self.paths = paths
+        self.drop_diacritics = drop_diacritics
+
+    def get_summary(self):
+        return {'paths': self.paths, 'drop_diacritics': self.drop_diacritics}
+
+    def __contains__(self, w):
+        return w in self.words
+
+
+def load_stopwords(path, drop_diacritics=False):
     """
     Load stopwords from vertical format file. Ignore comments (#) and (?) doubted
     """
     stopwords = []
     with open(path) as f:
         for line in f:
+            line = line.strip()
             if line.startswith('?') or line.startswith('#'):
                 continue
-            stopwords.append(line.strip())
+            if not line:
+                continue
+            if drop_diacritics:
+                line = drop_string_diacritics(line)
+            stopwords.append(line)
     return set(stopwords)
 
 

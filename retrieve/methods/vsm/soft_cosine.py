@@ -23,6 +23,9 @@ def soft_cosine_simple(query, index, S):
             den1 += sim * query.get((0, i), 0) * query.get((0, j), 0)
             den2 += sim * index.get((0, i), 0) * index.get((0, j), 0)
 
+    if den1 == 0 or den2 == 0:
+        return 0.0
+
     return (num / (math.sqrt(den1) * math.sqrt(den2)))
 
 

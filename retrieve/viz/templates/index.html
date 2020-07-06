@@ -23,9 +23,13 @@
     </section>
 
     <section class="section" style="padding: 1rem 1.5rem">
+
       <!-- tabs -->
       <div class="tabs is-centered is-medium">
 	<ul>
+	  <li id="home-tab" class="is-active">
+	    <a onClick="switchToTab('home')">Home</a>
+	  </li>
 	  <li id="heatmap-tab" class="is-active">
 	    <a onClick="switchToTab('heatmap')">Heatmap</a>
 	  </li>
@@ -37,17 +41,46 @@
 
       <!-- content -->
       <div class="container has-text-centered">
+	<!-- home -->
+	<div id="home-content">
+	  Some info about the visualization ...
+	</div>
+
+	<!-- heatmap -->
 	<div id="heatmap-content">
 	  <div id="heatmap-viz"></div>
 	</div>
 
+	<!-- documents -->
 	<div id="doc-content" class="is-hidden">
-	  Documents
-	  <div id="doc-viz"></div>
+	  <div class="columns">
+	    <!-- left column -->
+	    <div class="column">
+	      <article class="message is-dark">
+		<div class="message-header">
+		  <p id="doc1-id"></p>
+		</div>
+		<div class="message-body" id="doc1-text">
+		  
+		</div>
+	      </article>
+	    </div>	    
+	    <!-- right column -->
+	    <div class="column">
+	      <article class="message is-dark">
+		<div class="message-header">
+		  <p id="doc2-id"></p>
+		</div>
+		<div class="message-body" id="doc2-text">
+		</div>
+	      </article>
+	    </div>
+	  </div>
 	</div>
+
       </div>
     </section>
-    
+
     <footer class="footer">
       <div class="content has-text-centered">
     	<p>Created by ...</p>
@@ -56,9 +89,10 @@
     
   </body>
 
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.3.0/socket.io.js"></script>
+  <script src="https://d3js.org/d3-color.v1.min.js"></script>
+  <script src="https://d3js.org/d3-interpolate.v1.min.js"></script>
+  <script src="https://d3js.org/d3-scale-chromatic.v1.min.js"></script>
   <script src="https://d3js.org/d3.v4.js"></script>
   <script src="static/main.js"></script>
-  <!-- <script src="static/example.js"></script> -->
 
 </html>

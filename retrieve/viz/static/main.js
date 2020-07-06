@@ -1,15 +1,13 @@
 
 $(document).ready(function() {
 
-  var socket = io.connect('http://' + document.domain + ':' + location.port);
-
-  socket.on('heatmap', function(data) {
+  $.get("heatmap", function(data) {
 
     console.log(data);
 
     const maxWidth = 1000;
     const maxHeight = 400;
-    const cellSizeMin = 3.5;
+    const cellSizeMin = 4;
 
     const nrow = data.nrow;
     const ncol = data.ncol;
@@ -73,7 +71,7 @@ $(document).ready(function() {
       .attr('x', width / 2)
       .attr('y', 20 - margin.top)
       .style("text-anchor", "middle")
-      .text(data.colName);
+      .text(data.colName + ' (' + data.ncol + ' docs)');
 
     /** add yAxis label */
     heatmap.append("text")
@@ -82,7 +80,7 @@ $(document).ready(function() {
       .attr('x', 0 - (height / 2))
       .attr('dy', '1em')
       .style('text-anchor', 'middle')
-      .text(data.rowName);
+      .text(data.rowName + ' (' + data.nrow + ' docs)');
 
     /** hide ticks */
     heatmap.select('#xAxis').selectAll('g.tick').style('opacity', 0);
@@ -93,10 +91,8 @@ $(document).ready(function() {
     heatmap.select('#yAxis').selectAll('.tick').attr('id', d => 'yAxis-' + d);
 
     // build color scale
-    var myColor = d3.scalePow()
-	.exponent(1) // TODO: nonlinear scale
-	.range(["white", "#BD262B"])
-	.domain([0, 1]);
+    var myColor = d3.scaleSequential(d3.interpolateOrRd)
+	.domain([data.minSim, data.maxSim]);
 
     // tooltip
     var tooltip = d3.select("body")
@@ -126,10 +122,15 @@ $(document).ready(function() {
 	.style('opacity', 0);
 
     var mouseover = function(p) {
-      // highlight rect
+      // highlight rect and rescale
+      var factor = 2;
+      var tx = -(xScale(p.col) + cellSizeDisp / 2) * (factor - 1),
+      	  ty = -(yScale(p.row) + cellSizeDisp / 2) * (factor - 1);
       d3.select(this)
+	.attr("transform", "translate(" + tx + "," + ty + ") scale (" + factor + ")")
 	.style("stroke", "black")
 	.style("opacity", 1);
+      
       // tooltip
       tooltip.style('opacity', 1);
       // add opacity to lines
@@ -159,6 +160,12 @@ $(document).ready(function() {
     };
 
     var mouseleave = function(p) {
+      // reposition
+      var factor = 1;
+      var tx = -(xScale(p.col) + cellSizeDisp / 2) * (factor - 1),
+      	  ty = -(yScale(p.row) + cellSizeDisp / 2) * (factor - 1);
+      d3.select(this)
+      	.attr("transform", "translate(" + tx + "," + ty + ") scale (" + factor + ")");
       // reset opacity of rect
       d3.select(this)
 	.style("stroke", "none")
@@ -173,6 +180,36 @@ $(document).ready(function() {
       d3.select('#yAxis-' + p.row).style('opacity', 0);
     };
 
+    var renderDocument = function(eId, eText, data) {
+      /** append id */
+      $(eId).empty().append(data.id);
+      /** append body */
+      var text = "<em>";
+      data.text.split(" ").forEach(function(w, i) {
+	if ($.inArray(i, data.match) > -1) text += " <strong>" + w + "</strong> ";
+	else text += " " + w + " ";
+      });
+      text += "</em>";
+      $(eText).empty()
+	.append("<p>" + data.left + "</p>")
+	.append("<p>" + text + "</p>")
+	.append("<p>" + data.right + "</p>");
+    };
+
+    var onclick = function(p) {
+      console.log(p);
+
+      /** request comparison */
+      $.get("matching", {row: p.row, col: p.col}, function(data) {
+	console.log(data);
+	/** render documents */
+	renderDocument('#doc1-id', '#doc1-text', data.doc1);
+	renderDocument('#doc2-id', '#doc2-text', data.doc2);
+	/** switch to tab */
+	switchToTab("doc");
+      });
+    };
+
     heatmap.selectAll()
       .data(data.points)     /** no "if-function" needed in this case */
       .enter()
@@ -184,12 +221,15 @@ $(document).ready(function() {
       .attr("width", cellSizeDisp)
       .attr("height", cellSizeDisp)
       .style("fill", p => myColor(p.sim))
-      .style("stroke-width", 1)
+      .style("stroke-width", 0.5)
       .style("stroke", "none")
       .style("opacity", 0.75)
       .on("mouseover", mouseover)
       .on("mousemove", mousemove)
-      .on("mouseleave", mouseleave);
+      .on("mouseleave", mouseleave)
+      .on("click", onclick);
   });
+
+  /**  */
 
 });

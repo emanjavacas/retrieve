@@ -53,7 +53,7 @@ class TestSoftCosine(unittest.TestCase):
             for j in range(10):
                 sim1 = sims[i, j]
                 sim2 = soft_cosine_simple(self.query[i], self.index[j], S)
-                self.assertAlmostEqual(sim1, sim2, msg=f"{i}!={j}")
+                self.assertAlmostEqual(sim1, sim2, msg=f"{i}!={j}; {sim1}:{sim2}")
 
     def test_sparse(self):
         S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
