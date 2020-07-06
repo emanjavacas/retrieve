@@ -53,7 +53,7 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
         return docs
 
     books = {book: idx for idx, book in enumerate(
-        read_testament_books() + read_testament_books('old'))}
+        read_testament_books('old') + read_testament_books('new'))}
 
     def key(doc):
         book, chapter, verse = doc.doc_id
