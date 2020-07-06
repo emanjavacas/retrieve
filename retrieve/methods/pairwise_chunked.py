@@ -22,12 +22,12 @@ def pairwise_kernels_chunked(X, Y=None, metric='linear', chunk_size=0,
         for (i_start, i_stop), Q in tqdm.tqdm(sparse_chunks(X, chunk_size),
                                               total=n_chunks, desc=desc,
                                               disable=disable_bar):
-            Q_sims = pairwise_kernels(Q, Y, metric=metric, n_jobs=-1)
+            Q_sims = pairwise_kernels(Q, Y, metric=metric, dense_output=False, n_jobs=-1)
             if threshold > 0:
                 Q_sims = set_threshold(Q_sims, threshold)
                 sims[i_start: i_stop, :] = Q_sims
     else:
-        sims = pairwise_kernels(X, Y, metric=metric, n_jobs=n_jobs)
+        sims = pairwise_kernels(X, Y, metric=metric, n_jobs=n_jobs, dense_output=False)
         if threshold > 0.0:
             sims = set_threshold(sims, threshold)
 
