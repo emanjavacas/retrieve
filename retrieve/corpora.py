@@ -8,6 +8,9 @@ import warnings
 from retrieve.data import Doc, Ref, Collection
 
 
+VULGATE = "https://raw.githubusercontent.com/emanjavacas/cc-patrology/master/output/vulgate.csv"
+
+
 def decode_ref(ref):
     book, chapter, verse = ref.split('_')
     book = ' '.join(book.split('-'))
@@ -64,6 +67,14 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
 
 def load_vulgate(path='data/texts/vulgate.csv',
                  include_blb=False, split_testaments=False, **kwargs):
+
+    if path == 'data/texts/vulgate.csv' and not os.path.isfile(path):
+        # download from cc-patrology repository
+        try:
+            import urllib
+            urllib.urlretrieve(VULGATE, path)
+        except:
+            raise ValueError("Couldn't download vulgate")
 
     docs = read_bible(path, **kwargs)
     coll = Collection(docs, name=os.path.basename(path))
