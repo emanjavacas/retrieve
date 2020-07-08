@@ -4,11 +4,14 @@ import glob
 import json
 import collections
 import warnings
+import logging
 
 from retrieve.data import Doc, Ref, Collection
 
 
 VULGATE = "https://raw.githubusercontent.com/emanjavacas/cc-patrology/master/output/vulgate.csv"
+
+logger = logging.getLogger(__name__)
 
 
 def decode_ref(ref):
@@ -72,7 +75,8 @@ def load_vulgate(path='data/texts/vulgate.csv',
         # download from cc-patrology repository
         try:
             import urllib
-            urllib.urlretrieve(VULGATE, path)
+            logger.info("Downloading vulgate...")
+            urllib.request.urlretrieve(VULGATE, path)
         except:
             raise ValueError("Couldn't download vulgate")
 
