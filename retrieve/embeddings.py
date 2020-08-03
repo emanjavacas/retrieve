@@ -2,6 +2,7 @@
 import csv
 import logging
 
+import tqdm
 import pandas as pd
 import numpy as np
 import scipy.sparse
@@ -55,6 +56,9 @@ class Embeddings:
             self.id2word[idx] = word
         self.vectors = vectors
 
+    def __len__(self):
+        return len(self.word2id)
+
     def __getitem__(self, key):
         return self.vectors[self.word2id[key]]
 
@@ -68,6 +72,30 @@ class Embeddings:
 
     def default_vector(self):
         return np.mean(self.vectors, 0)
+
+    @classmethod
+    def from_file(cls, path, vocab=None, skip_header=False):
+        if vocab is not None:
+            vocab = set(vocab)
+        keys, vectors = [], []
+
+        with open(path) as f:
+            total = dim = None
+            if skip_header:
+                total, dim = next(f).strip().split()
+            for line in tqdm.tqdm(f, total=int(total) if total else None):
+                word, *vec = line.strip().split()
+                if vocab and word not in vocab:
+                    continue
+                keys.append(word)
+                vectors.append(np.array(vec, dtype=np.float))
+
+        # report missing
+        if vocab is not None:
+            logger.debug("Dropping {} words from vocabulary".format(len(
+                vocab.difference(set(keys)))))
+
+        return cls(keys, np.array(vectors))
 
     @classmethod
     def from_csv(cls, path, vocab=None):
@@ -99,7 +127,7 @@ class Embeddings:
         return keys, indices
 
     def get_S(self, words=None, fill_missing=False,
-              metric='cosine', beta=1, cutoff=0.0, chunk_size=0):
+              metric='cosine', beta=1, apply_mod=True, cutoff=0.0, chunk_size=0):
         """
         Arguments
         =========
@@ -152,7 +180,8 @@ class Embeddings:
         S = pairwise_kernels_chunked(
             self.vectors[indices], metric=metric, chunk_size=chunk_size)
         # apply modifications on S
-        S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
+        if apply_mod:
+            S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
         # drop elements
         if cutoff > 0.0:
             S = set_threshold(S, cutoff)
