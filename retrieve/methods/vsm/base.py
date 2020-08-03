@@ -56,7 +56,7 @@ class VSM:
         queries, index = transform[:len(queries)], transform[len(queries):]
 
         sims = pairwise_kernels_chunked(
-            queries, index, metric=metric, chunk_size=chunk_size,
+            queries, index, metric=metric, chunk_size=chunk_size, threshold=threshold,
             desc='Chunked similarities', disable_bar=disable_bar)
 
         return sims
