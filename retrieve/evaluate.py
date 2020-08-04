@@ -7,10 +7,6 @@ import numpy as np
 
 from retrieve import sparse_utils
 
-q_idxs = np.array([3, 4, 5])
-i_idxs = np.array([28, 321, 322])
-
-
 
 def _get_matches_fneg_tpos_at(q_idxs, i_idxs, ranking, at, strict):
     matches = []
