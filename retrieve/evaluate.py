@@ -12,9 +12,21 @@ def _get_matches_fneg_tpos_at(q_idxs, i_idxs, ranking, at, strict):
     matches = []
     # [[i, i, i, ... (len(q_idxs))],
     #  [j, j, j, ...], ...
+    #  [k, k, k, ...]]
     i_idxs_array = np.repeat(i_idxs[:, None], len(q_idxs), 1)
-    # [i, j, k, i, j, k, ... len(q_idxs)]
+    # [i, j, k, i, j, k, ... len(q_idxs) * len(i_idxs)]
     i_idxs_array = np.ravel(i_idxs_array.T)
+    # [[6, 4, 9, ... at],
+    #   .
+    #   .
+    #   len(i_idxs)
+    #  [3, 1, -1, -1, ... at],
+    #   .
+    #   .
+    #   len(i_idxs)
+    #  .
+    #  .
+    #  len(q_idxs) * len(i_idxs)
     q_idxs_array = np.repeat(ranking[q_idxs, :at], len(i_idxs), axis=0)
 
     row_matches, row_ranks = np.where(i_idxs_array[:, None] == q_idxs_array)
@@ -199,6 +211,12 @@ def get_thresholded_metrics(sims, refs, thresholds, copy=False):
 
 @contextlib.contextmanager
 def results_writer(fp):
+    """
+    Write output of experiment to file. For a given similarity matrix and refs
+    compute evaluation results at given thresholds. It also registers the sparsity
+    of the passed matrix (nnz) *before* applying a cutoff at a top-k value.
+    If copy==True, do not modify insplace the similarity matrix
+    """
     fp = open(fp, 'w+')
 
     def write(sims, refs, thresholds, copy=False, **kwargs):

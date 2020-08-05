@@ -177,6 +177,7 @@ class Embeddings:
         if not keys:
             raise ValueError("Couldn't find any of the requested words")
 
+        # (found words x found words)
         S = pairwise_kernels_chunked(
             self.vectors[indices], metric=metric, chunk_size=chunk_size)
         # apply modifications on S
@@ -188,12 +189,12 @@ class Embeddings:
 
         # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
+            # (requested words x requested words)
             S_ = scipy.sparse.lil_matrix((len(words), len(words)))
             # rearrange
-            src_x, src_y = np.meshgrid(indices, indices)
-            keys2words = np.array([keys[w] for w in words if w in keys])
-            trg_x, trg_y = np.meshgrid(keys2words, keys2words)
-            S_[trg_x, trg_y] = S[src_x, src_y]
+            index = np.array([keys[w] for w in words if w in keys])
+            index = np.tile(index, (len(index), 1))
+            S_[index, index.T] = S
             S = S_
             # make sure diagonal is always 1
             S.setdiag(1)
