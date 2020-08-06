@@ -117,7 +117,7 @@ def load_vulgate(path='data/texts/vulgate.csv',
             target.append(old.get_doc_idx(r))
 
         if len(source) == 0 or len(target) == 0:
-            warnings.warn("Missing refs for expected pair", ref)
+            warnings.warn("Missing refs for expected pair" + str(ref))
             continue
 
         refs.append(Ref(tuple(source), tuple(target),
