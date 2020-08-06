@@ -107,14 +107,18 @@ def load_vulgate(path='data/texts/vulgate.csv',
         source, target = [], []
         for r in ref['source']:
             if r not in new:
-                print("Couldn't find verse: new ", r)
+                warnings.warn("Couldn't find verse: new " + str(r))
                 continue
             source.append(new.get_doc_idx(r))
         for r in ref['target']:
             if r not in old:
-                print("Couldn't find verse: old", r)
+                warnings.warn("Couldn't find verse: old " + str(r))
                 continue
             target.append(old.get_doc_idx(r))
+
+        if len(source) == 0 or len(target) == 0:
+            warnings.warn("Missing refs for expected pair", ref)
+            continue
 
         refs.append(Ref(tuple(source), tuple(target),
                         meta={'ref_type': ref['ref_type'],
