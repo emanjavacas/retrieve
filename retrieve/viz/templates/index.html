@@ -7,9 +7,9 @@
     <title>Text-reuse Heat-map</title>
     <link rel="stylesheet" href="static/vendor/css/bulma-0.9.0.min.css">
     <link rel="stylesheet" href="static/main.css">
-    <script src="static/vendor/js/jquery-3.5.1.min.js">
-    <script src="static/tabs.js"></script>
+    <script src="static/vendor/js/jquery-3.5.1.min.js"></script>
     <script src="static/utils.js"></script>
+    <script src="static/tabs.js"></script>
   </head>
   <body>
 
@@ -22,7 +22,7 @@
       </div>
     </section>
 
-    <section class="section" style="padding: 1rem 1.5rem">
+    <section class="section" style="padding: 1rem 1.5rem;">
 
       <!-- tabs -->
       <div class="tabs is-centered is-medium">
@@ -43,7 +43,19 @@
       <div class="container has-text-centered">
 	<!-- home -->
 	<div id="home-content">
-	  Some info about the visualization ...
+	  <div class="columns">
+	    <div class="column is-one-fifth"></div>
+	    <div class="column is-three-fifths">
+	      Retrieve visualization panel showing a dot-plot of the found reuse cases.
+	      <br>
+	      Clicking on a dot takes you to a page displaying the actual texts in the match.
+	      <br>
+	      In the future, this page will have more documentation as well as bells and whistles.
+	      <br>
+	      Until then, please use with care.
+	    </div>
+	    <div class="column is-one-fifth"></div>
+	  </div>
 	</div>
 
 	<!-- heatmap -->
@@ -79,11 +91,14 @@
 	</div>
 
       </div>
+      
     </section>
 
-    <footer class="footer">
-      <div class="content has-text-centered">
-    	<p>Created by ...</p>
+    <footer class="footer" style="padding: 1.5rem 1.2rem 3rem;">
+      <div class="container">
+	<div class="content has-text-centered">
+    	  <p><strong>Retrieve</strong> © 2020 <a href="https://www.github.com/emanjavacas/retrieve">Enrique Manjavacas</a></p>
+	</div>
       </div>
     </footer>
     

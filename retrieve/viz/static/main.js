@@ -15,7 +15,7 @@ $(document).ready(function() {
     var cellSize = Math.min(maxWidth / ncol, maxHeight / nrow);
     var cellSizeDisp = Math.max(cellSize, cellSizeMin);    
 
-    var margin = {top: 50, right: 100, bottom: 20, left: 100},
+    var margin = {top: 50, right: 150, bottom: 20, left: 150},
 	width = (ncol * cellSize), // - margin.left - margin.right,
 	height = (nrow * cellSize); // - margin.top - margin.bottom;
 
