@@ -186,7 +186,6 @@ class Embeddings:
         # drop elements
         if cutoff > 0.0:
             S = set_threshold(S, cutoff)
-
         # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
             # (requested words x requested words)
