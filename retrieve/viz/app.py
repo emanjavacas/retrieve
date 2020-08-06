@@ -26,6 +26,8 @@ def extract_matching_words(doc1, doc2):
 class VisualizerApp:
     def __init__(self, sims, coll1, coll2=None, sim_range=(None, None),
                  host='localhost', port=5000):
+        """
+        """
         # data
         if coll2 is None:
             # drop diagonal
