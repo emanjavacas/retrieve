@@ -32,3 +32,4 @@ def enable_log_level(level=logging.DEBUG):
 
 from . import utils
 from .pipeline import pipeline
+from .embeddings import Embeddings
