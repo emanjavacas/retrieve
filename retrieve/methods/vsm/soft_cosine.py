@@ -116,7 +116,7 @@ if __name__ == '__main__':
     embs = Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
 
     for cutoff in [0.25, 0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
-        S = embs.get_S(words=vocab, fill_missing=True, cutoff=cutoff)
+        S = embs.get_S(vocab=vocab, fill_missing=True, cutoff=cutoff)
         nelem = S.shape[0] ** 2
         total_sim_size = (nelem - S.shape[0]) / 2
         effec_sim_size = (S.nnz - S.shape[0]) / 2

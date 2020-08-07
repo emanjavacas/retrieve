@@ -1,4 +1,5 @@
 
+import gzip
 import csv
 import logging
 
@@ -79,11 +80,14 @@ class Embeddings:
             vocab = set(vocab)
         keys, vectors = [], []
 
-        with open(path) as f:
+        open_fn = gzip.open if path.endswith(".gz") else open
+        with open_fn(path) as f:
             total = dim = None
             if skip_header:
                 total, dim = next(f).strip().split()
             for line in tqdm.tqdm(f, total=int(total) if total else None):
+                if isinstance(line, bytes):
+                    line = line.decode()
                 word, *vec = line.strip().split()
                 if vocab and word not in vocab:
                     continue
@@ -126,14 +130,14 @@ class Embeddings:
                 indices.append(self.word2id[w])
         return keys, indices
 
-    def get_S(self, words=None, fill_missing=False,
+    def get_S(self, vocab=None, fill_missing=False,
               metric='cosine', beta=1, apply_mod=True, cutoff=0.0, chunk_size=0):
         """
         Arguments
         =========
 
-        words : list (optional), words in desired order. The output matrix will
-            have word-similarities ordered according to the order in `words`.
+        vocab : list (optional), vocab in desired order. The output matrix will
+            have word-similarities ordered according to the order in `vocab`.
             However, if `fill_missing` is False, while the order is mantained,
             there will be gaps.
 
@@ -148,8 +152,8 @@ class Embeddings:
 
         >>> vectors = [[0.35, 0.75], [0.5, 0.5], [0.75, 0.35]]
         >>> embs = Embeddings(['a', 'c', 'e'], np.array(vectors))
-        >>> words = ['c', 'd', 'a', 'f']
-        >>> S = embs.get_S(words=words, fill_missing=True)
+        >>> vocab = ['c', 'd', 'a', 'f']
+        >>> S = embs.get_S(vocab=vocab, fill_missing=True)
         >>> S.shape             # asked for 4 words (fill_missing)
         (4, 4)
         >>> S[1, 3] == 0.0      # missing words evaluate to one-hot vectors
@@ -160,7 +164,7 @@ class Embeddings:
         True
         >>> S[2, 0] == S[0, 2]
         True
-        >>> keys, S = embs.get_S(words=words)
+        >>> keys, S = embs.get_S(vocab=vocab)
         >>> list(keys) == ['c', 'a']  # words only in keys in requested order
         True
         >>> S.shape             # only words in space (fill_missing=False)
@@ -170,12 +174,12 @@ class Embeddings:
         >>> np.allclose(S[0, 1], sim)
         True
         """
-        if fill_missing and not words:
-            raise ValueError("`fill_missing` requires `words`")
+        if fill_missing and not vocab:
+            raise ValueError("`fill_missing` requires `vocab`")
 
-        keys, indices = self.get_indices(words or self.keys)
+        keys, indices = self.get_indices(vocab or self.keys)
         if not keys:
-            raise ValueError("Couldn't find any of the requested words")
+            raise ValueError("Couldn't find any of the requested vocab")
 
         # (found words x found words)
         S = pairwise_kernels_chunked(
@@ -189,9 +193,9 @@ class Embeddings:
         # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
             # (requested words x requested words)
-            S_ = scipy.sparse.lil_matrix((len(words), len(words)))
+            S_ = scipy.sparse.lil_matrix((len(vocab), len(vocab)))
             # rearrange
-            index = np.array([keys[w] for w in words if w in keys])
+            index = np.array([keys[w] for w in vocab if w in keys])
             index = np.tile(index, (len(index), 1))
             S_[index, index.T] = S
             S = S_

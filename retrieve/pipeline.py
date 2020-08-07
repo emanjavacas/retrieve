@@ -6,9 +6,9 @@ from retrieve.methods import SetSimilarity, Tfidf, align_collections
 from retrieve.methods import create_embedding_scorer, ConstantScorer
 
 
-def require_embeddings(embs, msg=''):
+def require_embeddings(embs, msg='', **kwargs):
     if isinstance(embs, str):
-        embs = Embeddings.from_file(embs)
+        embs = Embeddings.from_file(embs, **kwargs)
     if not isinstance(embs, Embeddings):
         raise ValueError(msg)
     return embs
@@ -45,7 +45,8 @@ def pipeline(coll1, coll2=None,
         TextPreprocessor(
             lower=lower, stopwords=stopwords, stop_field=stop_field
         ).process_collections(*colls, min_n=min_n, max_n=max_n, skip_k=skip_k)
-        vocab = FeatureSelector(*colls).filter_collections(*colls, criterion=criterion)
+        fsel = FeatureSelector(*colls)
+        vocab = fsel.filter_collections(*colls, criterion=criterion)
 
         timer(desc='Preprocessing')
 
@@ -60,7 +61,8 @@ def pipeline(coll1, coll2=None,
             coll2_feats = coll2.get_features() if coll2 is not None else coll1_feats
             tfidf = Tfidf(vocab, **method_fit).fit(coll1_feats + coll2_feats)
             if use_soft_cosine:
-                embs = require_embeddings(embs, 'soft cosine requires embeddings')
+                embs = require_embeddings(
+                    embs, 'soft cosine requires embeddings')
                 sims = tfidf.get_soft_cosine_similarities(
                     coll1_feats, coll2_feats, threshold=threshold, **soft_cosine_params)
             else:
@@ -69,7 +71,7 @@ def pipeline(coll1, coll2=None,
         elif method == 'alignment-based':
             if embs is not None:
                 scorer = create_embedding_scorer(
-                    require_embeddings(embs),
+                    require_embeddings(embs, vocab=fsel.get_vocab()),
                     **{key: val for key, val in method_fit.items()
                        if key in set(['match', 'mismatch', 'cutoff', 'factor'])})
             else:

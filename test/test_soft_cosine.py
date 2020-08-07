@@ -29,8 +29,8 @@ class TestSoftCosine(unittest.TestCase):
         feats = Tfidf(vocab).fit(feats).transform(feats)
         query, index = feats[:feats.shape[0]//2], feats[feats.shape[0]//2:]
         # load embeddings, make sure S is in same order as vocab
-        embs = Embeddings.from_csv(
-            'data/retrieve.latin.lemma.100.embeddings', vocab=vocab)
+        embs = Embeddings.from_file(
+            'data/latin.lemma.ft.dim100.mc2.embeddings.gz', vocab=vocab)
 
         self.embs = embs
         self.query = query
@@ -47,7 +47,7 @@ class TestSoftCosine(unittest.TestCase):
         self.assertTrue(np.allclose(sims1, sims2))
 
     def test_full(self):
-        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
+        S = self.embs.get_S(vocab=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
         sims = soft_cosine_similarities(self.query, self.index, S)
         for i in range(10):
             for j in range(10):
@@ -56,7 +56,7 @@ class TestSoftCosine(unittest.TestCase):
                 self.assertAlmostEqual(sim1, sim2, msg=f"{i}!={j}; {sim1}:{sim2}")
 
     def test_sparse(self):
-        S = self.embs.get_S(words=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
+        S = self.embs.get_S(vocab=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
         self.assertTrue(
             scipy.sparse.issparse(S),
             msg="get_S returns sparse if fill_missing is True or cutoff > 0.0")

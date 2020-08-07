@@ -90,7 +90,7 @@ class VSMSoftCosine(VSM):
         transform = self.transform(index + queries)
         index, queries = transform[:len(index)], transform[len(index):]
         S = embs.get_S(
-            words=self.vectorizer.get_feature_names(), fill_missing=True, **kwargs)
+            vocab=self.vectorizer.get_feature_names(), fill_missing=True, **kwargs)
         sims = soft_cosine_similarities(
             queries, index, S, chunk_size=chunk_size, threshold=threshold,
             disable_bar=disable_bar)
