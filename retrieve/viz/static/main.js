@@ -2,8 +2,12 @@
 $(document).ready(function() {
 
   $.get("heatmap", function(data) {
-
     console.log(data);
+
+    /** add metadata to header */
+    $("#heatmap-metadata").append(
+      "Showing " + data.points.length + " links <small>(Density = 1/" +
+	round((data.nrow * data.ncol) / data.points.length) + ')</small>');
 
     const maxWidth = 1000;
     const maxHeight = 400;
@@ -198,6 +202,7 @@ $(document).ready(function() {
 
     var onclick = function(p) {
       console.log(p);
+      d3.select(this).style("fill", "#1F75B5");
 
       /** request comparison */
       $.get("matching", {row: p.row, col: p.col}, function(data) {
@@ -205,6 +210,9 @@ $(document).ready(function() {
 	/** render documents */
 	renderDocument('#doc1-id', '#doc1-text', data.doc1);
 	renderDocument('#doc2-id', '#doc2-text', data.doc2);
+	/** add metadata to doc page */
+	$('#doc-metadata').empty().append(
+	  "Link similarity: <span class=\"tag\">" + p.sim + "</span>. Matching words shown in bold");
 	/** switch to tab */
 	switchToTab("doc");
       });
