@@ -76,7 +76,9 @@ def soft_cosine_similarities(queries, index, S, chunk_size=500, threshold=0.0,
 
         # (chunk_size x m)
         Q_sims = (den1[:, None] * den2[None, :])
-        Q_sims = num.multiply(1 / Q_sims) if is_S_sparse else (num / Q_sims)
+        with np.errstate(divide='ignore'):
+            # this might run into division by 0
+            Q_sims = num.multiply(1 / Q_sims) if is_S_sparse else (num / Q_sims)
 
         # apply threshold
         set_threshold(Q_sims, threshold)
