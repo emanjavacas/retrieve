@@ -69,7 +69,9 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
 
 
 def load_vulgate(path='data/texts/vulgate.csv',
-                 include_blb=False, split_testaments=False, **kwargs):
+                 include_blb=False, split_testaments=False, max_targets=None,
+                 # read_bible kwargs
+                 **kwargs):
 
     if path == 'data/texts/vulgate.csv' and not os.path.isfile(path):
         # download from cc-patrology repository
@@ -103,7 +105,7 @@ def load_vulgate(path='data/texts/vulgate.csv',
         return old, new
 
     refs = []
-    for ref in load_blb_refs():
+    for ref in load_blb_refs(max_targets=max_targets):
         source, target = [], []
         for r in ref['source']:
             if r not in new:
@@ -128,12 +130,19 @@ def load_vulgate(path='data/texts/vulgate.csv',
     return old, new, refs
 
 
-def load_blb_refs(path='data/texts/blb.refs.json'):
+def load_blb_refs(path='data/texts/blb.refs.json', max_targets=None):
     with open(path) as f:
-        return [{'source': [decode_ref(s_ref) for s_ref in ref['source']],
-                 'target': [decode_ref(t_ref) for t_ref in ref['target']],
-                 'ref_type': ref['ref_type']}
-                for ref in json.load(f)]
+        output = []
+        for ref in json.load(f):
+            source = [decode_ref(s_ref) for s_ref in ref['source']]
+            target = [decode_ref(t_ref) for t_ref in ref['target']]
+            ref_type = ref['ref_type']
+            if max_targets is not None:
+                if (len(source) > max_targets or len(target) > max_targets):
+                    continue
+            output.append({'source': source, 'target': target, 'ref_type': ref_type})
+
+    return output
 
 
 def read_doc(path, fields=('token', 'pos', '_', 'lemma')):
