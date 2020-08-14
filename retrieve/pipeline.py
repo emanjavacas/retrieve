@@ -18,7 +18,7 @@ def pipeline(coll1, coll2=None,
              # Text Preprocessing
              lower=True, stopwords=None, stop_field='lemma',
              # Ngrams
-             min_n=1, max_n=1, skip_k=0,
+             min_n=1, max_n=1, skip_k=0, sep='--',
              # Feature Selection
              criterion=None,
              method='set-based', threshold=0, processes=-1, embs=None,
@@ -43,8 +43,8 @@ def pipeline(coll1, coll2=None,
     with utils.timer() as timer:
         # preprocessing
         TextPreprocessor(
-            lower=lower, stopwords=stopwords, stop_field=stop_field
-        ).process_collections(*colls, min_n=min_n, max_n=max_n, skip_k=skip_k)
+            lower=lower, stopwords=stopwords, stop_field=stop_field,
+        ).process_collections(*colls, min_n=min_n, max_n=max_n, skip_k=skip_k, sep=sep)
         fsel = FeatureSelector(*colls)
         vocab = fsel.filter_collections(*colls, criterion=criterion)
 
@@ -62,25 +62,29 @@ def pipeline(coll1, coll2=None,
             tfidf = Tfidf(vocab, **method_fit).fit(coll1_feats + coll2_feats)
             if use_soft_cosine:
                 embs = require_embeddings(
-                    embs, 'soft cosine requires embeddings')
+                    embs, msg='soft cosine requires embeddings', vocab=vocab)
                 sims = tfidf.get_soft_cosine_similarities(
-                    coll1_feats, coll2_feats, threshold=threshold, **soft_cosine_params)
+                    coll1_feats, coll2_feats, embs=embs,
+                    threshold=threshold, **soft_cosine_params)
             else:
                 sims = tfidf.get_similarities(
                     coll1_feats, coll2_feats, threshold=threshold)
         elif method == 'alignment-based':
             if embs is not None:
+                embs = require_embeddings(embs, vocab=fsel.get_vocab())
                 scorer = create_embedding_scorer(
-                    require_embeddings(embs, vocab=fsel.get_vocab()),
+                    embs,
                     **{key: val for key, val in method_fit.items()
                        if key in set(['match', 'mismatch', 'cutoff', 'factor'])})
             else:
                 scorer = ConstantScorer(
                     **{key: val for key, val in method_fit.items()
                        if key in set(['match', 'mismatch'])})
+            if precomputed_sims is not None:
+                print("Computing {} alignments...".format(precomputed_sims.nnz))
             sims = align_collections(
                 coll1, coll2,
-                S=precomputed_sims, field=None, processes=-1, scorer=scorer,
+                S=precomputed_sims, field=None, processes=processes, scorer=scorer,
                 **{key: val for key, val in method_fit.items()
                    if key in set(['extend_gap', 'open_gap'])})
 
