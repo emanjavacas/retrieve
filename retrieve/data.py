@@ -13,8 +13,8 @@ from dataclasses import dataclass
 import numpy as np
 
 from retrieve import utils
-from retrieve.methods import (jaccard, containment,
-                              weighted_containment, weighted_jaccard)
+from retrieve.methods import (jaccard, containment, containment_min,
+                              weighted_containment, weighted_jaccard, cosine)
 from retrieve.methods import local_alignment, get_horizontal_alignment
 
 logger = logging.getLogger(__name__)
@@ -142,7 +142,9 @@ def _wrap_fn(fn, use_counter=False):
 setattr(Doc, 'jaccard', _wrap_fn(jaccard, use_counter=True))
 setattr(Doc, 'weighted_jaccard', _wrap_fn(weighted_jaccard, use_counter=True))
 setattr(Doc, 'containment', _wrap_fn(containment, use_counter=True))
+setattr(Doc, 'containment_min', _wrap_fn(containment_min, use_counter=True))
 setattr(Doc, 'weighted_containment', _wrap_fn(weighted_containment, use_counter=True))
+setattr(Doc, 'cosine', _wrap_fn(cosine, use_counter=True))
 setattr(Doc, 'local_alignment', _wrap_fn(local_alignment))
 setattr(Doc, 'get_horizontal_alignment', _wrap_fn(get_horizontal_alignment))
 
@@ -165,6 +167,9 @@ class Collection:
         self.fsel_summary = None
 
     def __getitem__(self, idx):
+        if isinstance(idx, np.integer):
+            idx = int(idx)
+
         if isinstance(idx, int):
             # access by index
             return self._docs[idx]
@@ -217,7 +222,7 @@ class Collection:
 
         return output, index
 
-    def get_features(self, cast=None, min_features=0, min_feature_density=0):
+    def get_features(self, cast=None, min_features=0, min_feature_density=0, **kwargs):
         """
         Get preprocessed text.
 
@@ -232,7 +237,7 @@ class Collection:
         output = []
         for doc in self.get_docs():
             # get features
-            feats = doc.get_features()
+            feats = doc.get_features(**kwargs)
 
             # empty input if number of features falls below threshold
             if (min_features > 0 and len(feats) < min_features) or \

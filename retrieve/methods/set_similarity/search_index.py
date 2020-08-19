@@ -70,6 +70,9 @@ class SearchIndex(object):
 
     def _get_prefix(self, s):
         t = self.overlap_threshold_func(len(s), self.similarity_threshold)
+        # it can be shown that we only need to index a prefix of
+        # length|x|−⌈t·|x|⌉+1 for every recordxto ensure the prefix filtering-based
+        # method does not miss any similarity join result.
         prefix_size = len(s) - t + 1
         return s[:prefix_size]
 
@@ -88,9 +91,9 @@ class SearchIndex(object):
         prefix = self._get_prefix(s1)
         candidates = set([i for p1, token in enumerate(prefix)
                           for i, p2 in self.index[token]
-                          if (i < self.n_sets and self.position_filter_func(
-                              s1, self.sets[i], p1, p2,
-                              self.similarity_threshold))])
+                          if (i < self.n_sets and
+                              self.position_filter_func(s1, self.sets[i], p1, p2,
+                                                        self.similarity_threshold))])
         logger.debug("{} candidates found.".format(len(candidates)))
         results = deque([])
         for i in candidates:

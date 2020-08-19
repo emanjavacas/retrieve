@@ -1,5 +1,5 @@
 
-
+import math
 import logging
 import multiprocessing as mp
 
@@ -11,9 +11,19 @@ from .search_index import SearchIndex
 logger = logging.getLogger(__name__)
 
 
+def cosine(s1, s2, **kwargs):
+    s1, s2 = set(s1), set(s2)
+    return len(s1 & s2) / (math.sqrt(len(s1)) * math.sqrt(len(s2)))
+
+
 def containment(s1, s2, **kwargs):
     s1, s2 = set(s1), set(s2)
     return len(s1 & s2) / (len(s1) or 1)
+
+
+def containment_min(s1, s2, **kwargs):
+    s1, s2 = set(s1), set(s2)
+    return len(s1 & s2) / max(len(s1), len(s2))
 
 
 def jaccard(s1, s2, **kwargs):
@@ -37,15 +47,6 @@ def weighted_containment(s1, s2, **kwargs):
         num += min(c1, c2)
         den += c2
     return num / den
-
-
-class get_similarities:
-    def __init__(self, search_index, queries):
-        self.search_index = search_index
-        self.queries = queries
-
-    def __call__(self, i):
-        return i, self.search_index.query(self.queries[i])
 
 
 class Workload:
