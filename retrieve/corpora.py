@@ -177,9 +177,11 @@ def read_refs(path):
 
 def shingle_doc(doc, f_id, overlap=10, window=20):
     shingled_docs = []
-    for start in range(0, len(next(iter(doc.values()))), window - overlap):
+    n_words = len(doc[next(iter(doc.keys()))])
+    for start in range(0, n_words, window - overlap):
         # doc might be smaller than window
-        stop = min(start + window, len(doc['token'][start:]))
+        stop = min(start + window, n_words)
+        assert start < stop, (start, stop, f_id)
         # doc id
         doc_id = f_id, (start, stop)
         # prepare doc
@@ -193,6 +195,7 @@ def shingle_doc(doc, f_id, overlap=10, window=20):
 
 def load_bernard(directory='data/texts/bernard',
                  bible_path='data/texts/vulgate.csv',
+                 max_targets=None,
                  **kwargs):
 
     bible = Collection(read_bible(bible_path), name='Vulgate')
@@ -203,12 +206,15 @@ def load_bernard(directory='data/texts/bernard',
         shingles = shingle_doc(doc, path, **kwargs)
         for ref in refs:
             source = []
+            target = ref['target']
             for shingle in shingles:
                 if set(ref['source']).intersection(set(shingle.fields['ids'])):
                     source.append(shingle.doc_id)
-            if source:
-                target = ref['target']
+            if source and (max_targets is None or len(source) <= max_targets) and \
+               target and (max_targets is None or len(target) <= max_targets):
                 shingled_refs.append(Ref(tuple(source), tuple(target), meta=ref))
+            else:
+                warnings.warn("Ignoring target")
 
         shingled_docs.extend(shingles)
 
