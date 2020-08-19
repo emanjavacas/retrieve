@@ -23,13 +23,14 @@ class SIF(VSM):
         self.npc = npc
         self.a = a
         # attributes
-        self.embs
+        self.embs = embs
         self.freqs = freqs
+        self.N = sum(freqs.values())
 
     def get_weight(self, w):
-        if w not in self.words:
+        if w not in self.freqs:
             raise KeyError(w)
-        return self.a / (self.a + self.freqs[w])
+        return self.a / (self.a + self.freqs[w] / self.N)
 
     def transform(self, sents):
         # get average
@@ -37,7 +38,7 @@ class SIF(VSM):
             sum(self.get_weight(w) * self.embs[w] for w in sent) / len(sent)
             for sent in sents])
         output = remove_pc(output, npc=self.npc)
-        return sents
+        return output
 
 
 class TfidfEmbedding(VSM):
