@@ -75,7 +75,26 @@ class Embeddings:
         return np.mean(self.vectors, 0)
 
     @classmethod
+    def from_fasttext(cls, path, vocab):
+        if vocab is None:
+            raise ValueError("FastText model requires vocab")
+        try:
+            import fastText
+        except ModuleNotFoundError:
+            raise ValueError("Couldn't import `fastText` module")
+        model, vectors = fastText.load_model(path), []
+
+        for word in vocab:
+            vectors.append(model.get_word_vector(word))
+
+        return cls(vocab, np.array(vectors))
+
+    @classmethod
     def from_file(cls, path, vocab=None, skip_header=False):
+        # dispatch fastText
+        if path.endswith('bin'):
+            return cls.from_fasttext(path, vocab)
+
         if vocab is not None:
             vocab = set(vocab)
         keys, vectors = [], []
@@ -96,8 +115,8 @@ class Embeddings:
 
         # report missing
         if vocab is not None:
-            logger.debug("Dropping {} words from vocabulary".format(len(
-                vocab.difference(set(keys)))))
+            logger.debug("Loaded {}/{} words from vocabulary".format(
+                len(keys), len(vocab)))
 
         return cls(keys, np.array(vectors))
 
