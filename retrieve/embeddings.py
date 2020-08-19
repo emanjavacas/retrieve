@@ -7,12 +7,15 @@ import tqdm
 import pandas as pd
 import numpy as np
 import scipy.sparse
+from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 from retrieve.methods import pairwise_kernels_chunked
 from retrieve.sparse_utils import set_threshold
 
 
 logger = logging.getLogger(__name__)
+
+SIM, DIST = 0, 1
 
 
 def load_embeddings(path, vocab=None):
@@ -38,6 +41,10 @@ def load_embeddings(path, vocab=None):
 
 
 class Embeddings:
+    # class constants
+    SIM = SIM
+    DIST = DIST
+
     """
     Convenience class to handle embeddings. This class is better initialized
     from the method `from_csv`
@@ -195,6 +202,8 @@ class Embeddings:
         """
         if fill_missing and not vocab:
             raise ValueError("`fill_missing` requires `vocab`")
+        if apply_mod and beta > 1 and cutoff is not None and cutoff < 0:
+            raise ValueError("Negative cutoff with positive beta yields wrong results")
 
         keys, indices = self.get_indices(vocab or self.keys)
         if not keys:
@@ -202,13 +211,11 @@ class Embeddings:
 
         # (found words x found words)
         S = pairwise_kernels_chunked(
-            self.vectors[indices], metric=metric, chunk_size=chunk_size)
+            self.vectors[indices], metric=metric, chunk_size=chunk_size,
+            threshold=cutoff)
         # apply modifications on S
         if apply_mod:
-            S = np.power(np.clip(S, a_min=0, a_max=np.max(S)), beta)
-        # drop elements
-        if cutoff > 0.0:
-            S = set_threshold(S, cutoff)
+            S = S.power(beta)
         # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
             # (requested words x requested words)
@@ -225,13 +232,28 @@ class Embeddings:
 
         return keys, S
 
-    def nearest_neighbours(self, words, metric='cosine', n=10, **kwargs):
+    def nearest_neighbours(self, words, n=10, metric='cosine', metric_type=SIM):
+        """
+        If `metric_type` is Embeddings.SIM then `metric` must be one of
+        sklearn.metrics.pairwise.PAIRWISE_KERNEL_FUNCTIONS:
+        - ['cosine', 'sigmoid', 'linear', etc.]
+        If `metric_type` is Embeddings.DIST then `metric` must be one of
+        sklearn.metrics.pairwise.PAIRWISE_DISTANCE_FUNCTIONS:
+        - ['cosine', 'euclidean', 'l1', 'l2', 'manhattan', 'cityblock']
+        """
         keys, index = self.get_indices(words)
-        S = pairwise_kernels_chunked(
-            self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
-        # get neighbours
-        neighs = np.argsort(-S, axis=1)[:, 1: n+1]
-        # get distances
+        if metric_type == Embeddings.SIM:
+            S = pairwise_kernels(
+                self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
+            # get neighbours
+            neighs = np.argsort(-S, axis=1)[:, 1: n+1]
+        elif metric_type == Embeddings.DIST:
+            S = pairwise_distances(
+                self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
+            neighs = np.argsort(S, axis=1)[:, 1: n+1]
+        else:
+            raise ValueError("Unknown `metric_type`")
+
         S = S[np.arange(len(keys)).repeat(n), np.ravel(neighs)]
         S = S.reshape(len(keys), -1)
         # human form
