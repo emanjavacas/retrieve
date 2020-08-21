@@ -13,7 +13,7 @@ def _top_k_dense(data, indices, indptr, k):
 
     # output variables
     top_indices = np.zeros((nrows, k), dtype=indices.dtype) - 1
-    top_data = np.zeros((nrows, k), dtype=data.dtype) * np.nan
+    top_vals = np.zeros((nrows, k), dtype=data.dtype) * np.nan
 
     for i in nb.prange(nrows):
         start, stop = indptr[i], indptr[i + 1]
@@ -21,9 +21,9 @@ def _top_k_dense(data, indices, indptr, k):
         n_items = min(len(top_k), k)
         # assign
         top_indices[i, 0:n_items] = indices[start:stop][top_k]
-        top_data[i, 0:n_items] = data[start:stop][top_k]
+        top_vals[i, 0:n_items] = data[start:stop][top_k]
 
-    return top_indices, top_data
+    return top_indices, top_vals
 
 
 @nb.njit()
@@ -51,13 +51,14 @@ def _top_k_sparse_data(data, indices, indptr, k):
 
 
 def _top_k_sparse(data, indices, indptr, k):
-    top_idxs, top_vals, rows, cols = _top_k_sparse_data(data, indices, indptr, k)
-    top_idxs, top_vals = np.concatenate(top_idxs), np.concatenate(top_vals)
+    top_indices, top_vals, rows, cols = _top_k_sparse_data(data, indices, indptr, k)
+    top_indices, top_vals = np.concatenate(top_indices), np.concatenate(top_vals)
     rows, cols = np.concatenate(rows), np.concatenate(cols)
-    top_idxs = scipy.sparse.csr_matrix((top_idxs, (rows, cols)), dtype=indices.dtype)
+    top_indices = scipy.sparse.csr_matrix(
+        (top_indices, (rows, cols)), dtype=indices.dtype)
     top_vals = scipy.sparse.csr_matrix((top_vals, (rows, cols)), dtype=data.dtype)
 
-    return top_idxs, top_vals
+    return top_indices, top_vals
 
 
 def top_k(X, k):
@@ -84,12 +85,17 @@ def top_k(X, k):
     >>> data.tolist()
     [[3.0, 2.0], [5.0, 4.0], [8.0, 7.0]]
     """
-    if not scipy.sparse.issparse(X):
-        return np.argsort(X, 1)[::-1][:, :k]
+    if scipy.sparse.issparse(X):
+        X = X.tocsr()
+        data, indices, indptr = X.data, X.indices, X.indptr
+        top_indices, top_vals = _top_k_dense(data, indices, indptr, k)
 
-    X = X.tocsr()
-    data, indices, indptr = X.data, X.indices, X.indptr
-    return _top_k_dense(data, indices, indptr, k)
+    else:
+        top_indices = np.argsort(X, 1)
+        top_vals = np.take_along_axis(X, top_indices, 1)
+        top_indices, top_vals = top_indices[::-1][:, :k], top_vals[::-1][:, :k]
+
+    return top_indices, top_vals
 
 
 def sparse_chunks(M, chunk_size):

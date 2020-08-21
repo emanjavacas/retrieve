@@ -119,8 +119,10 @@ def timer(print_on_leave=True, desc='', fmt='took {:0.1f} secs in total', **kwar
     def time_so_far(desc='', fmt='took {:0.1f} secs', **kwargs):
         nonlocal last
         desc = ' - ' + (desc + ' ' if desc else desc)
-        print(desc + fmt.format(time.time() - last), **kwargs)
+        took = time.time() - last
+        print(desc + fmt.format(took), **kwargs)
         last = time.time()
+        return took
 
     yield time_so_far
 

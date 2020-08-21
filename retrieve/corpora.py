@@ -52,7 +52,7 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
             doc_id = book, chapter, verse
             try:
                 docs.append(Doc(fields=dict(zip(fields, data)), doc_id=doc_id))
-            except ValueError:
+            except ValueError as e:
                 warnings.warn("Ignoring document {}".format(' '.join(doc_id)))
 
     if not sort_docs:
