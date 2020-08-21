@@ -16,7 +16,7 @@ def require_embeddings(embs, msg='', **kwargs):
 
 def pipeline(coll1, coll2=None,
              # Text Preprocessing
-             lower=True, stopwords=None, stop_field='lemma',
+             field='lemma', lower=True, stopwords=None, stop_field='lemma',
              # Ngrams
              min_n=1, max_n=1, skip_k=0, sep='--',
              # Feature Selection
@@ -33,22 +33,26 @@ def pipeline(coll1, coll2=None,
              # Soft_cosine_params: cutoff, beta
              use_soft_cosine=False, soft_cosine_params={},
              # For Blast-style alignment
-             precomputed_sims=None):
+             precomputed_sims=None,
+             # return time stats
+             return_stats=False):
 
     colls = [coll for coll in [coll1, coll2] if coll]
 
     if isinstance(stopwords, str):
         stopwords = utils.Stopwords(stopwords)
 
+    stats = {}
+
     with utils.timer() as timer:
         # preprocessing
         TextPreprocessor(
-            lower=lower, stopwords=stopwords, stop_field=stop_field,
+            field=field, lower=lower, stopwords=stopwords, stop_field=stop_field,
         ).process_collections(*colls, min_n=min_n, max_n=max_n, skip_k=skip_k, sep=sep)
         fsel = FeatureSelector(*colls)
         vocab = fsel.filter_collections(*colls, criterion=criterion)
 
-        timer(desc='Preprocessing')
+        stats['preprocessing'] = timer(desc='Preprocessing')
 
         # similarities
         if method == 'set-based':
@@ -87,7 +91,12 @@ def pipeline(coll1, coll2=None,
                 S=precomputed_sims, field=None, processes=processes, scorer=scorer,
                 **{key: val for key, val in method_fit.items()
                    if key in set(['extend_gap', 'open_gap'])})
+        else:
+            raise ValueError("Unknown method", method)
 
-        timer(desc='Similarity')
+        stats['similarity'] = timer(desc='Similarity')
+
+    if return_stats:
+        return sims, stats
 
     return sims
