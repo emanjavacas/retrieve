@@ -170,41 +170,52 @@ def f_score(p, r, beta=1):
     return (1 + beta ** 2) * ((p * r) / (((beta ** 2) * p) + r))
 
 
-def get_metrics(sims, refs, at_values=(1, 5, 10, 20), strict=False):
+def get_metrics_froms_tpos_fneg_fpos(tpos, fneg, fpos):
+    p = tpos / (tpos + fpos)
+    r = tpos / (tpos + fneg)
+    return {'p': p,
+            'r': r,
+            'f1': f_score(p, r, beta=1),
+            'f2': f_score(p, r, beta=2),
+            'fp5': f_score(p, r, beta=0.5)}
+
+
+def get_metrics(inp, refs, at_values=(1, 5, 10, 20), strict=False, input_type='sims'):
     """
-    Get metrics from similarity metric and refs
+    Get metrics from similarity metric and refs. Input might be the full similarity
+    matrix or an already computed top-k ranking
     """
-    ranking, sims = sparse_utils.top_k(sims, max(at_values))
+    assert inp.shape[1] >= max(at_values), \
+        "Asked to rank top-{} items but got only {} items".format(
+            max(at_values), inp.shape[1])
+
+    ranking = None
+    if input_type == 'sims':
+        ranking, _ = sparse_utils.top_k(inp, max(at_values))
+    else:
+        ranking = inp[:, :max(at_values)]
+
     stats, matches = ranking_stats_from_tuples(
         ranking, refs, at_values=at_values, strict=strict)
 
     results = {}
     for at, stats in zip(at_values, stats):
         tpos, fneg, fpos = stats['tpos'], stats['fneg'], stats['fpos']
-        # precision
-        p = tpos / (tpos + fpos)
-        # recall
-        r = tpos / (tpos + fneg)
-        # f-score (0.5, 1, 2)
-        f1 = f_score(p, r, beta=1)
-        f2 = f_score(p, r, beta=2)
-        fp5 = f_score(p, r, beta=0.5)
-
         # accumulate
-        for score, metric in zip([p, r, fp5, f1, f2], ['p', 'r', 'f0.5', 'f1', 'f2']):
+        for metric, score in get_metrics_froms_tpos_fneg_fpos(tpos, fneg, fpos).items():
             results['{}@{}'.format(metric, at)] = score
 
     return results
 
 
-def get_thresholded_metrics(sims, refs, thresholds, copy=False):
+def get_thresholded_metrics(inp, refs, thresholds, copy=False, **kwargs):
     metrics = collections.defaultdict(list)
 
     for th in thresholds:
-        sims = sparse_utils.set_threshold(sims, th, copy=copy)
-        for metric, val in get_metrics(sims, refs).items():
+        inp = sparse_utils.set_threshold(inp, th, copy=copy)
+        for metric, val in get_metrics(inp, refs, **kwargs).items():
             metrics[metric].append(val)
-        metrics['nnz'].append(sims.nnz)
+        metrics['nnz'].append(inp.nnz)
 
     return metrics
 
