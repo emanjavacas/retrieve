@@ -44,3 +44,8 @@ class TestSet(unittest.TestCase):
         self._test_similarities(
             _test_similarity_func(0.5, 'containment_min', self.old, self.new),
             500, 'containment_min')
+
+    def test_cosine(self):
+        self._test_similarities(
+            _test_similarity_func(0.5, 'cosine', self.old, self.new),
+            500, 'cosine')

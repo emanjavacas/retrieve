@@ -3,10 +3,11 @@ import math
 import logging
 import multiprocessing as mp
 
-from scipy.sparse import dok_matrix
+from scipy.sparse import dok_matrix, csr_matrix
 from tqdm import tqdm
 
 from .search_index import SearchIndex
+from ... import utils
 
 logger = logging.getLogger(__name__)
 
@@ -54,21 +55,31 @@ class Workload:
         self.search_index = search_index
         self.queries = queries
 
-    def __call__(self, i):
-        result = self.search_index.query(self.queries[i])
-        return i, result
+    def __call__(self, chunk):
+        output = []
+        for i in chunk:
+            result = self.search_index.query(self.queries[i])
+            output.append((i, result))
+        return output
 
 
 def parallel_search(search_index, queries, processes):
     workload = Workload(search_index, queries)
+    rows, cols, data = [], [], []
 
-    sims = {}
     with mp.Pool(processes) as pool:
-        for i, candidates in pool.map(workload, list(range(len(queries)))):
-            for j, sim in candidates:
-                sims[i, j] = sim
+        chunks = list(utils.chunks(
+            range(len(queries)),
+            # make sure to use at most `processes` chunks
+            len(queries) // (processes + 1)))
+        for idx, chunk in enumerate(pool.map(workload, chunks)):
+            for i, results in chunk:
+                for j, sim in results:
+                    rows.append(i)
+                    cols.append(j)
+                    data.append(sim)
 
-    return sims
+    return rows, cols, data
 
 
 class SetSimilarity:
@@ -96,24 +107,22 @@ class SetSimilarity:
 
         self.fit(index, queries=queries)
 
-        sims = dok_matrix((len(queries), len(index)))
-
         processes = mp.cpu_count() if processes < 0 else processes
         logger.info("Using {} cpus".format(processes))
         if processes == 1:
+            sims = dok_matrix((len(queries), len(index)))
             for idx in tqdm(range(len(queries)), total=len(queries),
                             desc="Set similarity: {}".format(self.similarity_fn)):
                 for jdx, sim in self.search_index.query(queries[idx]):
                     sims[idx, jdx] = sim
         else:
             results = parallel_search(self.search_index, queries, processes)
-            for (i, j), sim in results.items():
-                sims[i, j] = sim
+            rows, cols, data = results
+            sims = csr_matrix((data, (rows, cols)), shape=(len(queries), len(index)))
 
         # drop self-similarities
         if self_search:
             sims.setdiag(0)
-
         # transform to csr
         sims = sims.tocsr()
         sims.eliminate_zeros()
