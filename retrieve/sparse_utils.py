@@ -5,6 +5,26 @@ import numba as nb
 
 
 @nb.njit()
+def substract_vector_loop(data, indices, indptr, vec):
+    for i in nb.prange(vec.shape[0]):
+        data[indptr[i]:indptr[i+1]] -= vec[i]
+    return data, indices, indptr
+
+
+def substract_vector(S, vec, inplace=False, axis=0):
+    orig_type = type(S)
+    X = S
+    if not inplace:
+        X = S.copy()
+    if axis == 0:
+        X = X.tocsr()
+    elif axis == 1:
+        X = X.tocsc()
+    substract_vector_loop(X.data, X.indices, X.indptr, vec)
+    return orig_type(X)
+
+
+@nb.njit()
 def _top_k_dense(data, indices, indptr, k):
     # indptr holds pointers to indices and data
     # indices[indptr[0]:indptr[1]] -> index of nonzero items in 1st row
@@ -91,9 +111,8 @@ def top_k(X, k):
         top_indices, top_vals = _top_k_dense(data, indices, indptr, k)
 
     else:
-        top_indices = np.argsort(X, 1)
+        top_indices = np.argsort(X, 1)[:, -k:][:, ::-1]
         top_vals = np.take_along_axis(X, top_indices, 1)
-        top_indices, top_vals = top_indices[::-1][:, :k], top_vals[::-1][:, :k]
 
     return top_indices, top_vals
 
@@ -144,15 +163,24 @@ def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=Fals
     >>> (X != X_orig).nnz > 0
     True
     """
+    if threshold == 0:
+        return X
+
     if not scipy.sparse.issparse(X):
         X[np.where(X < threshold)] = 0.0
         return sparse_matrix(X)
 
     if copy:
-        X2 = scipy.sparse.dok_matrix(X.shape)
-        for i, j, _ in zip(*scipy.sparse.find(X >= threshold)):
-            X2[i, j] = X[i, j]
-        return sparse_matrix(X2)
+        rows, cols, _ = scipy.sparse.find(X >= threshold)
+        if len(rows) > 0:
+            # matrix is not empty
+            data = np.squeeze(np.array(X[rows, cols]), axis=0)  # find returns matrix
+            return sparse_matrix(
+                scipy.sparse.csr_matrix(
+                    (data, (rows, cols)), shape=X.shape))
+        else:
+            # matrix is empty
+            return sparse_matrix(X.shape)
 
     if isinstance(X, (scipy.sparse.lil_matrix, scipy.sparse.dok_matrix)):
         raise ValueError("Cannot efficiently drop items on", str(type(X)))
