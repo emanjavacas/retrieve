@@ -170,7 +170,7 @@ def f_score(p, r, beta=1):
     return (1 + beta ** 2) * ((p * r) / (((beta ** 2) * p) + r))
 
 
-def get_metrics_froms_tpos_fneg_fpos(tpos, fneg, fpos):
+def get_metrics_from_tpos_fneg_fpos(tpos, fneg, fpos):
     p = tpos / (tpos + fpos)
     r = tpos / (tpos + fneg)
     return {'p': p,
@@ -202,7 +202,7 @@ def get_metrics(inp, refs, at_values=(1, 5, 10, 20), strict=False, input_type='s
     for at, stats in zip(at_values, stats):
         tpos, fneg, fpos = stats['tpos'], stats['fneg'], stats['fpos']
         # accumulate
-        for metric, score in get_metrics_froms_tpos_fneg_fpos(tpos, fneg, fpos).items():
+        for metric, score in get_metrics_from_tpos_fneg_fpos(tpos, fneg, fpos).items():
             results['{}@{}'.format(metric, at)] = score
 
     return results
