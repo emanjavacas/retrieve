@@ -10,7 +10,7 @@ import scipy.sparse
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 from retrieve.methods import pairwise_kernels_chunked
-from retrieve.sparse_utils import set_threshold
+from retrieve.sparse_utils import set_threshold, top_k, substract_vector
 
 
 logger = logging.getLogger(__name__)
@@ -38,6 +38,10 @@ def load_embeddings(path, vocab=None):
         embs.drop(missing, 1, inplace=True)
 
     return embs
+
+
+def normalize_vectors(vectors):
+    return vectors / np.linalg.norm(vectors, axis=1)[:, None]
 
 
 class Embeddings:
@@ -69,6 +73,25 @@ class Embeddings:
 
     def __getitem__(self, key):
         return self.vectors[self.word2id[key]]
+
+    def __contains__(self, key):
+        return key in self.word2id
+
+    def apply_projection(self, proj, batch_size=4096, renorm=False):
+        import torch
+        if isinstance(proj, str):
+            # assume path
+            proj = torch.load(proj)
+        vectors = self.vectors
+        if renorm:
+            vectors = normalize_vectors(vectors)
+        for i in tqdm.tqdm(range(0, len(self.vectors), batch_size)):
+            start, stop = i, min(i + batch_size, len(vectors))
+            vectors[start:stop, :] = (proj @ vectors[start:stop, :].T).T
+        self.vectors = vectors
+
+    def normalize_vectors(self):
+        self.vectors = normalize_vectors(self.vectors)
 
     @property
     def keys(self):
@@ -232,7 +255,9 @@ class Embeddings:
 
         return keys, S
 
-    def nearest_neighbours(self, words, n=10, metric='cosine', metric_type=SIM):
+    def nearest_neighbours(self, words, n=10,
+                           metric='cosine',
+                           metric_type=SIM, csls_k=0):
         """
         If `metric_type` is Embeddings.SIM then `metric` must be one of
         sklearn.metrics.pairwise.PAIRWISE_KERNEL_FUNCTIONS:
@@ -241,10 +266,20 @@ class Embeddings:
         sklearn.metrics.pairwise.PAIRWISE_DISTANCE_FUNCTIONS:
         - ['cosine', 'euclidean', 'l1', 'l2', 'manhattan', 'cityblock']
         """
+        if csls_k > 0 and metric_type != SIM:
+            raise ValueError("CSLS is defined over similarities not distances")
+
         keys, index = self.get_indices(words)
+
         if metric_type == Embeddings.SIM:
-            S = pairwise_kernels(
-                self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
+            if csls_k > 0:
+                S = csls(
+                    pairwise_kernels(self.vectors, metric=metric, n_jobs=-1),
+                    csls_k)
+                S = S[index]
+            else:
+                S = pairwise_kernels(
+                    self.vectors[index], self.vectors, metric=metric, n_jobs=-1)
             # get neighbours
             neighs = np.argsort(-S, axis=1)[:, 1: n+1]
         elif metric_type == Embeddings.DIST:
@@ -296,73 +331,30 @@ def export_fasttext_embeddings(path, vocab, output_path=None):
     return keys, vectors
 
 
-def evaluate_embeddings(eval_path):
-    pass
+def csls_dense(S, k=10):
+    indices, values = top_k(S, k + 1)
+    mean_values = values[:, 1:].mean(1)
+    return (2 * S) - mean_values[:, None] - mean_values[None, :]
 
 
-def cscl(X, Y, chunk_size):
-    pass
+def csls_sparse(S, k=10):
+    indices, values = top_k(S, k + 1)
+    mean_values = values[:, 1:].mean(1)
+    S = substract_vector(substract_vector(S * 2, mean_values, axis=1),
+                         mean_values, axis=0)
+    return S
 
 
-def standard_nn(X, Z, batch_size):
-    # translation = collections.defaultdict(int)
-    # for i in range(0, len(src), BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, len(src))
-    #     similarities = x[src[i:j]].dot(z.T)
-    #     nn = similarities.argmax(axis=1).tolist()
-    #     for k in range(j-i):
-    #         translation[src[i+k]] = nn[k]
-    pass
+def csls(S, k=10):
+    if scipy.sparse.issparse(S):
+        return csls_sparse(S, k)
+    return csls_dense(S, k)
 
 
-def invnn(X, Z):
-    # translation = collections.defaultdict(int)
-    # best_rank = np.full(len(src), x.shape[0], dtype=int)
-    # best_sim = np.full(len(src), -100, dtype=dtype)
-    # for i in range(0, z.shape[0], BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, z.shape[0])
-    #     similarities = z[i:j].dot(x.T)
-    #     ind = (-similarities).argsort(axis=1)
-    #     ranks = asnumpy(ind.argsort(axis=1)[:, src])
-    #     sims = asnumpy(similarities[:, src])
-    #     for k in range(i, j):
-    #         for l in range(len(src)):
-    #             rank = ranks[k-i, l]
-    #             sim = sims[k-i, l]
-    #             if rank < best_rank[l] or (rank == best_rank[l] and sim > best_sim[l]):
-    #                 best_rank[l] = rank
-    #                 best_sim[l] = sim
-    #                 translation[src[l]] = k
-    pass
-
-
-def invsoftmax(X, Z, inv_sample=None):
-    # sample = xp.arange(x.shape[0]) if inv_sample is None else xp.random.randint(0, x.shape[0], inv_sample)
-    # partition = xp.zeros(z.shape[0])
-    # for i in range(0, len(sample), BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, len(sample))
-    #     partition += xp.exp(args.inv_temperature*z.dot(x[sample[i:j]].T)).sum(axis=1)
-    # for i in range(0, len(src), BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, len(src))
-    #     p = xp.exp(args.inv_temperature*x[src[i:j]].dot(z.T)) / partition
-    #     nn = p.argmax(axis=1).tolist()
-    #     for k in range(j-i):
-    #         translation[src[i+k]] = nn[k]
-    pass
-
-
-def csls(X, Z):
-    # knn_sim_bwd = xp.zeros(z.shape[0])
-    # for i in range(0, z.shape[0], BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, z.shape[0])
-    #     knn_sim_bwd[i:j] = topk_mean(z[i:j].dot(x.T), k=args.neighborhood, inplace=True)
-    # for i in range(0, len(src), BATCH_SIZE):
-    #     j = min(i + BATCH_SIZE, len(src))
-    #     similarities = 2*x[src[i:j]].dot(z.T) - knn_sim_bwd  # Equivalent to the real CSLS scores for NN
-    #     nn = similarities.argmax(axis=1).tolist()
-    #     for k in range(j-i):
-    #         translation[src[i+k]] = nn[k]
-    pass
+def csls_crosslingual(S, S1, S2, k=10):
+    S1_mean = top_k(S1, k + 1)[1][:, 1:].mean(1)
+    S2_mean = top_k(S2, k + 1)[1][:, 1:].mean(1)
+    return (2 * S) - S1_mean[:, None] - mean_values[None, :]
 
 
 if __name__ == '__main__':
