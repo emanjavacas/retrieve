@@ -5,53 +5,62 @@ Inspired by:
  - https://github.com/lingpy/lingpy/blob/master/lingpy/algorithm/cython/calign.pyx
 """
 
+import logging
+
 import itertools
 from itertools import product
 
 import numba as nb
+import scipy.sparse
 import numpy as np
 
 import pyximport; pyximport.install()  # noqa: E702
 from . import _align
 
 
+logger = logging.getLogger(__name__)
+
 VGAP, HGAP, END, MATCH, UNPROCESSED = range(1, 6)
 GAP_SYM = -1
 
 
-def _get_embedding_scores(s1, s2, S_lut, match, mismatch, factor):
+def _get_embedding_scores(s1, s2, S_lut, match, mismatch):
     scores = np.zeros((len(s1), len(s2)))
     for (i, a), (j, b) in product(enumerate(s1), enumerate(s2)):
         if a == b:
             scores[i, j] = match
         elif (a, b) in S_lut:
-            scores[i, j] = match * (S_lut[a, b] ** factor)
+            scores[i, j] = match * S_lut[a, b]
         else:
             scores[i, j] = mismatch
     return scores
 
 
-def create_embedding_scorer(embs, **kwargs):
+def create_embedding_scorer(embs, match=2, mismatch=-1, **kwargs):
     """
     embs : retrieve.Embeddings object
     """
-    _, S = embs.get_S()
-    return EmbeddingScorer(list(embs.keys), S, **kwargs)
+    _, S = embs.get_S(**kwargs)
+    return EmbeddingScorer(list(embs.keys), S, match=match, mismatch=mismatch)
 
 
 class EmbeddingScorer:
-    def __init__(self, d, S, match=2, mismatch=-1, factor=1, cutoff=0.8):
+    def __init__(self, d, S, match=2, mismatch=-1):
         self.match = match
         self.mismatch = mismatch
-        self.factor = factor
-        self.cutoff = cutoff
 
         # construct lookup similarity
         self.S_lut = self.construct_S(d, S)
 
     def construct_S(self, keys, S):
         S_lut = {}
-        for i, j in zip(*np.where(S >= self.cutoff)):
+        # get indices
+        if scipy.sparse.issparse(S):
+            ii, jj, _ = scipy.sparse.find(S)
+        else:
+            ii, jj = np.where(S > 0)
+        # build lookup
+        for i, j in zip(ii, jj):
             if i == j:
                 continue
             S_lut[keys[i], keys[j]] = S[i, j]
@@ -60,8 +69,7 @@ class EmbeddingScorer:
         return S_lut
 
     def get_scores(self, s1, s2):
-        return _get_embedding_scores(
-            s1, s2, self.S_lut, self.match, self.mismatch, self.factor)
+        return _get_embedding_scores(s1, s2, self.S_lut, self.match, self.mismatch)
 
 
 def _get_constant_scores(s1, s2, match, mismatch):
