@@ -34,8 +34,8 @@ def read_testament_books(testament='new'):
     return books
 
 
-def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
-               sort_docs=True):
+def read_bible(path, fields=('token', 'pos', '_', 'lemma'),
+               max_verses=-1, sort_docs=True, verse_ids=None):
     with open(path) as f:
         docs = []
         for line in f:
@@ -44,6 +44,8 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'), max_verses=-1,
             if max_verses > 0 and len(docs) >= max_verses:
                 break
             book, chapter, verse, *data = line.strip().split('\t')
+            if verse_ids is not None and (book, chapter, verse) not in verse_ids:
+                continue
             data = [field.split() for field in data]
             if len(data) != len(fields):
                 raise ValueError(
@@ -196,9 +198,10 @@ def shingle_doc(doc, f_id, overlap=10, window=20):
 def load_bernard(directory='data/texts/bernard',
                  bible_path='data/texts/vulgate.csv',
                  max_targets=None,
+                 read_bible_kwargs={},
                  **kwargs):
 
-    bible = Collection(read_bible(bible_path), name='Vulgate')
+    bible = Collection(read_bible(bible_path, **read_bible_kwargs), name='Vulgate')
     shingled_docs, shingled_refs = [], []
     for path in glob.glob(os.path.join(directory, '*.txt')):
         refs = read_refs(path.replace('.txt', '.refs.json'))
@@ -207,6 +210,9 @@ def load_bernard(directory='data/texts/bernard',
         for ref in refs:
             source = []
             target = ref['target']
+            if any(t not in bible for t in target):
+                warnings.warn("Missing target")
+                continue
             for shingle in shingles:
                 if set(ref['source']).intersection(set(shingle.fields['ids'])):
                     source.append(shingle.doc_id)
