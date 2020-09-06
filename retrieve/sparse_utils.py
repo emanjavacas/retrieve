@@ -125,6 +125,8 @@ def sparse_chunks(M, chunk_size):
     for i in range(0, n, chunk_size):
         start, stop = i, min(i + chunk_size, n)
         yield (start, stop), M[start:stop]
+    if stop < n:
+        yield (stop, n), M[stop:n]
 
 
 def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=False):
