@@ -10,7 +10,7 @@ import scipy.sparse
 from sklearn.metrics import pairwise_distances, pairwise_kernels
 
 from retrieve.methods import pairwise_kernels_chunked
-from retrieve.sparse_utils import set_threshold, top_k, substract_vector
+from retrieve.sparse_utils import top_k, substract_vector
 
 
 logger = logging.getLogger(__name__)
@@ -233,12 +233,14 @@ class Embeddings:
             raise ValueError("Couldn't find any of the requested vocab")
 
         # (found words x found words)
+        print("Computing {} similarities".format(len(indices)))
         S = pairwise_kernels_chunked(
             self.vectors[indices], metric=metric, chunk_size=chunk_size,
             threshold=cutoff)
+        print("Got S")
         # apply modifications on S
         if apply_mod:
-            S = S.power(beta)
+            S = (S.power(beta) if scipy.sparse.issparse(S) else np.power(S, beta))
         # add one-hot vectors for OOV and rearrange to match input vocabulary
         if fill_missing:
             # (requested words x requested words)

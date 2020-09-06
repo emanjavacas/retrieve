@@ -251,14 +251,3 @@ def results_writer(fp):
     yield write
 
     fp.close()
-
-
-# import numpy as np
-# n_queries, n_index = 5, 6
-# ranking = np.zeros((n_queries, n_index)) * np.nan
-# for i in range(n_queries):
-#     for j in range(n_index):
-#         if j < i:
-#             ranking[i, j] = i + j
-# refs = [([0], [1, 2]), ([2, 3], [3, 5, 6]), ([4], [8])]
-# stats, matches = ranking_stats_from_tuples(ranking, refs, at_values=[5], strict=True)
