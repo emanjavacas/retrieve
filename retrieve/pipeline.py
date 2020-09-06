@@ -1,4 +1,6 @@
 
+import collections
+
 from retrieve import utils
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
 from retrieve.embeddings import Embeddings
@@ -12,6 +14,15 @@ def require_embeddings(embs, msg='', **kwargs):
     if not isinstance(embs, Embeddings):
         raise ValueError(msg)
     return embs
+
+
+def get_vocab_from_colls(*colls, field=None):
+    output = collections.Counter()
+    for coll in colls:
+        for doc in coll:
+            output.update(doc.get_features(field=field))
+    output, _ = zip(*output.most_common())
+    return output
 
 
 def pipeline(coll1, coll2=None,
@@ -32,10 +43,12 @@ def pipeline(coll1, coll2=None,
              method_params={},
              # Soft_cosine_params: cutoff, beta
              use_soft_cosine=False, soft_cosine_params={},
+             # whether to use parallel soft-cosine (could run into memory issues)
+             parallel_soft_cosine=False,
              # For Blast-style alignment
              precomputed_sims=None,
              # return time stats
-             return_stats=False):
+             return_stats=False, verbose=False):
 
     colls = [coll for coll in [coll1, coll2] if coll is not None]
 
@@ -66,18 +79,24 @@ def pipeline(coll1, coll2=None,
             tfidf = Tfidf(vocab, **method_params).fit(coll1_feats + coll2_feats)
             if use_soft_cosine:
                 embs = require_embeddings(
-                    embs, msg='soft cosine requires embeddings', vocab=vocab)
+                    embs, vocab=get_vocab_from_colls(coll1, coll2, field=field),
+                    msg='soft cosine requires embeddings')
                 sims = tfidf.get_soft_cosine_similarities(
                     coll1_feats, coll2_feats, embs=embs,
-                    threshold=threshold, chunk_size=chunk_size, **soft_cosine_params)
+                    threshold=threshold,
+                    chunk_size=chunk_size, parallel=parallel_soft_cosine,
+                    **soft_cosine_params)
             else:
                 sims = tfidf.get_similarities(
                     coll1_feats, coll2_feats, threshold=threshold)
         elif method == 'alignment-based':
-            if embs is not None:
-                embs = require_embeddings(embs, vocab=fsel.get_vocab())
+            # get scorer
+            if 'scorer' in method_params:
+                scorer = method_params['scorer']
+            elif embs is not None:
                 scorer = create_embedding_scorer(
-                    embs, chunk_size=chunk_size,
+                    require_embeddings(
+                        embs, vocab=get_vocab_from_colls(coll1, coll2, field=field)),
                     **{key: val for key, val in method_params.items()
                        if key in set(['match', 'mismatch', 'cutoff', 'beta'])})
             else:

@@ -8,7 +8,9 @@ from retrieve.corpora import load_vulgate
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
 from retrieve.embeddings import Embeddings
 from retrieve.methods import Tfidf
-from retrieve.methods.vsm.soft_cosine import soft_cosine_similarities, soft_cosine_simple
+from retrieve.methods.vsm.soft_cosine import soft_cosine_similarities
+from retrieve.methods.vsm.soft_cosine import soft_cosine_simple
+from retrieve.methods.vsm.soft_cosine import parallel_soft_cosine
 
 from sklearn.metrics import pairwise_kernels
 
@@ -71,3 +73,11 @@ class TestSoftCosine(unittest.TestCase):
         self.assertTrue(
             np.allclose(sims2.todense(), sims1),
             msg="sparse and dense results match")
+
+    def test_parallel(self):
+        S = self.embs.get_S(vocab=self.vocab, fill_missing=True, cutoff=0.75, beta=2)
+        sims_parallel = parallel_soft_cosine(self.query, self.index, S, threshold=0.25)
+        sims_single = soft_cosine_similarities(self.query, self.index, S, threshold=0.25)
+
+        self.assertTrue(all(sims_parallel.data == sims_single.data))
+

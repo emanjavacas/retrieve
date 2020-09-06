@@ -1,7 +1,7 @@
 
 import inspect
 
-from .soft_cosine import soft_cosine_similarities
+from .soft_cosine import soft_cosine_similarities, parallel_soft_cosine
 
 
 def init_sklearn_vectorizer(vectorizer, vocab=None, **kwargs):
@@ -67,7 +67,8 @@ class VSMSoftCosine(VSM):
         self.vectorizer = init_sklearn_vectorizer(vectorizer, vocab=vocab, **kwargs)
 
     def get_soft_cosine_similarities(self, queries, index, embs, threshold=0.25,
-                                     chunk_size=500, disable_bar=False, **kwargs):
+                                     chunk_size=500, disable_bar=False,
+                                     parallel=False, n_jobs=-1, **kwargs):
         """
         Compute soft cosine similarities between queries and index using the
         (possibly sparse) similarity matrix S indexing the similarity between
@@ -91,8 +92,12 @@ class VSMSoftCosine(VSM):
         index, queries = transform[:len(index)], transform[len(index):]
         S = embs.get_S(
             vocab=self.vectorizer.get_feature_names(), fill_missing=True, **kwargs)
-        sims = soft_cosine_similarities(
-            queries, index, S, chunk_size=chunk_size, threshold=threshold,
-            disable_bar=disable_bar)
+        if parallel:
+            sims = parallel_soft_cosine(
+                queries, index, S, threshold=threshold, n_jobs=n_jobs)
+        else:
+            sims = soft_cosine_similarities(
+                queries, index, S, chunk_size=chunk_size, threshold=threshold,
+                disable_bar=disable_bar)
 
         return sims
