@@ -24,12 +24,12 @@ def pairwise_kernels_chunked(X, Y=None, metric='linear', chunk_size=0,
                                               disable=disable_bar):
             Q_sims = pairwise_kernels(Q, Y, metric=metric, n_jobs=-1)
             if threshold is not None:
-                Q_sims = set_threshold(Q_sims, threshold)
+                set_threshold(Q_sims, threshold)
                 sims[i_start: i_stop, :] = Q_sims
     else:
         sims = pairwise_kernels(X, Y, metric=metric, n_jobs=n_jobs)
         if threshold is not None:
-            sims = set_threshold(sims, threshold)
+            set_threshold(sims, threshold)
 
     if scipy.sparse.isspmatrix_lil(sims):
         sims = sims.tocsr()
