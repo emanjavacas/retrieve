@@ -182,6 +182,9 @@ class Collection:
     def __contains__(self, doc_id):
         return doc_id in self._doc_ids
 
+    def __iter__(self):
+        yield from self.get_docs()
+
     def get_doc_idx(self, doc_id):
         # access by doc id
         return self._doc_ids[doc_id]
