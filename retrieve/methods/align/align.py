@@ -10,6 +10,7 @@ import logging
 import itertools
 from itertools import product
 
+import tqdm
 import numba as nb
 import scipy.sparse
 import numpy as np
@@ -24,13 +25,13 @@ VGAP, HGAP, END, MATCH, UNPROCESSED = range(1, 6)
 GAP_SYM = -1
 
 
-def _get_embedding_scores(s1, s2, S_lut, match, mismatch):
+def _get_embedding_scores(s1, s2, d, S, match, mismatch):
     scores = np.zeros((len(s1), len(s2)))
     for (i, a), (j, b) in product(enumerate(s1), enumerate(s2)):
         if a == b:
             scores[i, j] = match
-        elif (a, b) in S_lut:
-            scores[i, j] = match * S_lut[a, b]
+        elif a in d and b in d:
+            scores[i, j] = match * S[d[a], d[b]]
         else:
             scores[i, j] = mismatch
     return scores
@@ -41,35 +42,18 @@ def create_embedding_scorer(embs, match=2, mismatch=-1, **kwargs):
     embs : retrieve.Embeddings object
     """
     _, S = embs.get_S(**kwargs)
-    return EmbeddingScorer(list(embs.keys), S, match=match, mismatch=mismatch)
+    return EmbeddingScorer(embs.keys, S, match=match, mismatch=mismatch)
 
 
 class EmbeddingScorer:
     def __init__(self, d, S, match=2, mismatch=-1):
         self.match = match
         self.mismatch = mismatch
-
-        # construct lookup similarity
-        self.S_lut = self.construct_S(d, S)
-
-    def construct_S(self, keys, S):
-        S_lut = {}
-        # get indices
-        if scipy.sparse.issparse(S):
-            ii, jj, _ = scipy.sparse.find(S)
-        else:
-            ii, jj = np.where(S > 0)
-        # build lookup
-        for i, j in zip(ii, jj):
-            if i == j:
-                continue
-            S_lut[keys[i], keys[j]] = S[i, j]
-            S_lut[keys[j], keys[i]] = S[i, j]
-
-        return S_lut
+        self.S = S
+        self.d = d
 
     def get_scores(self, s1, s2):
-        return _get_embedding_scores(s1, s2, self.S_lut, self.match, self.mismatch)
+        return _get_embedding_scores(s1, s2, self.d, self.S, self.match, self.mismatch)
 
 
 def _get_constant_scores(s1, s2, match, mismatch):
