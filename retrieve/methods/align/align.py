@@ -246,24 +246,35 @@ def get_horizontal_alignment(s1, s2, a1=None, a2=None, gap_sym=GAP_SYM, **kwargs
     return str1, alignment, str2
 
 
-def get_local_alignment_numba(s1, s2, scorer, extend_gap, open_gap, terminal_gap):
+def get_local_alignment_numba(
+        s1, s2, scorer, extend_gap, open_gap, terminal_gap, only_score):
     scores = scorer.get_scores(list(s1), list(s2))
     smatrix, tmatrix, row, col, score = compute_input_matrices(
         len(s1), len(s2), scores, extend_gap, open_gap, terminal_gap)
+    if only_score:
+        return score
     a1, a2 = traceback(smatrix, tmatrix, row, col)
     return a1, a2, score
 
 
-def get_local_alignment_cython(s1, s2, scorer, extend_gap, open_gap, terminal_gap):
+def get_local_alignment_cython(
+        s1, s2, scorer, extend_gap, open_gap, terminal_gap, only_score):
     scores = scorer.get_scores(list(s1), list(s2))
     return _align.sw_alignment(
-        len(s1), len(s2), extend_gap, open_gap, terminal_gap, scores)
+        len(s1), len(s2), extend_gap, open_gap, terminal_gap, scores, only_score)
 
 
 def local_alignment(s1, s2, scorer=ConstantScorer(),
-                    extend_gap=-1, open_gap=-1, terminal_gap=0, impl='cython'):
+                    extend_gap=-1, open_gap=-1, terminal_gap=0,
+                    impl='cython', only_score=False):
     if len(s1) == 0 or len(s2) == 0:
+        if only_score:
+            return 0.0
         return [], [], 0.0
 
-    fn = get_local_alignment_cython if impl == 'cython' else get_local_alignment_numba
-    return fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap)
+    if impl == 'cython':
+        fn = get_local_alignment_cython
+    else:
+        fn = get_local_alignment_numba
+
+    return fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap, only_score)

@@ -1,4 +1,5 @@
 
+
 def sw_alignment(
         int s1len,
         int s2len,
@@ -6,7 +7,8 @@ def sw_alignment(
         float e_gap,
         float o_gap,
         float t_gap,
-        object scores):
+        object scores,
+	bint only_score):
 
     # pointers
     cdef int i, j, row, col, move
@@ -65,6 +67,10 @@ def sw_alignment(
                 row, col = i, j
 
     best_score = smatrix[row][col]
+
+    if only_score:
+        return best_score
+
     move = tmatrix[row][col]
 
     # traceback

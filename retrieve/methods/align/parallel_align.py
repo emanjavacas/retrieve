@@ -16,8 +16,8 @@ class Workload:
     def __call__(self, args):
         # unpack
         i, j = args
-        *_, score = self.coll1[i].local_alignment(
-            self.coll2[j], field=self.field, **self.kwargs)
+        score = self.coll1[i].local_alignment(
+            self.coll2[j], field=self.field, only_score=True, **self.kwargs)
 
         return (i, j), score
 
@@ -40,13 +40,14 @@ def align_collections(queries, index=None, S=None, field=None, processes=1, **kw
 
     processes = mp.cpu_count() if processes < 0 else processes
     if processes == 1:
-        for i, j in tqdm.tqdm(zip(x, y), desc='Local alignment'):
-            *_, score = queries[i].local_alignment(index[j], field=field, **kwargs)
+        for i, j in tqdm.tqdm(zip(x, y), total=len(x), desc='Local alignment'):
+            score = queries[i].local_alignment(
+                index[j], field=field, only_score=True, **kwargs)
             sims[i, j] = score
     else:
         workload = Workload(queries, index, field=field, **kwargs)
         with mp.Pool(processes) as pool:
-            for (i, j), score in pool.map(workload, zip(x, y)):
+            for (i, j), score in pool.map(workload, list(zip(x, y))):
                 sims[i, j] = score
 
     return sims.tocsr()
