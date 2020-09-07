@@ -94,9 +94,10 @@ def pipeline(coll1, coll2=None,
             if 'scorer' in method_params:
                 scorer = method_params['scorer']
             elif embs is not None:
+                vocab = get_vocab_from_colls(coll1, coll2, field=field)
                 scorer = create_embedding_scorer(
-                    require_embeddings(
-                        embs, vocab=get_vocab_from_colls(coll1, coll2, field=field)),
+                    require_embeddings(embs, vocab=vocab),
+                    vocab=vocab,  # in case embeddings are already loaded
                     **{key: val for key, val in method_params.items()
                        if key in set(['match', 'mismatch', 'cutoff', 'beta'])})
             else:
@@ -107,7 +108,7 @@ def pipeline(coll1, coll2=None,
                 print("Computing {} alignments...".format(precomputed_sims.nnz))
             sims = align_collections(
                 coll1, coll2,
-                S=precomputed_sims, field=None, processes=processes, scorer=scorer,
+                S=precomputed_sims, field=field, processes=processes, scorer=scorer,
                 **{key: val for key, val in method_params.items()
                    if key in set(['extend_gap', 'open_gap'])})
         else:
