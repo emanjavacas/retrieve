@@ -1,4 +1,5 @@
 
+import time
 import gzip
 import csv
 import logging
@@ -34,7 +35,7 @@ def load_embeddings(path, vocab=None):
     if vocab is not None:
         # drop words not in vocab
         missing = embs.columns.difference(vocab)
-        logger.debug("Dropping {} words from vocabulary".format(len(missing)))
+        logger.info("Dropping {} words from vocabulary".format(len(missing)))
         embs.drop(missing, 1, inplace=True)
 
     return embs
@@ -127,14 +128,14 @@ class Embeddings:
 
         if vocab is not None:
             vocab = set(vocab)
+            logger.info("Loading {} word embeddings".format(len(vocab)))
         keys, vectors = [], []
 
         open_fn = gzip.open if path.endswith(".gz") else open
         with open_fn(path) as f:
-            total = dim = None
             if skip_header:
-                total, dim = next(f).strip().split()
-            for line in tqdm.tqdm(f, total=int(total) if total else None):
+                next(f)
+            for line in f:
                 if isinstance(line, bytes):
                     line = line.decode()
                 word, *vec = line.strip().split()
@@ -145,7 +146,7 @@ class Embeddings:
 
         # report missing
         if vocab is not None:
-            logger.debug("Loaded {}/{} words from vocabulary".format(
+            logger.info("Loaded {}/{} words from vocabulary".format(
                 len(keys), len(vocab)))
 
         return cls(keys, np.array(vectors))
@@ -233,11 +234,12 @@ class Embeddings:
             raise ValueError("Couldn't find any of the requested vocab")
 
         # (found words x found words)
-        print("Computing {} similarities".format(len(indices)))
+        logger.info("Computing {} similarities".format(len(indices)))
+        start = time.time()
         S = pairwise_kernels_chunked(
             self.vectors[indices], metric=metric, chunk_size=chunk_size,
             threshold=cutoff)
-        print("Got S")
+        logger.info("Got S in {:.2f} secs".format(time.time() - start))
         # apply modifications on S
         if apply_mod:
             S = (S.power(beta) if scipy.sparse.issparse(S) else np.power(S, beta))
