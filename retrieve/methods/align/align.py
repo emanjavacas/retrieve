@@ -41,7 +41,7 @@ def create_embedding_scorer(embs, match=2, mismatch=-1, **kwargs):
     """
     embs : retrieve.Embeddings object
     """
-    if 'full_missing' in kwargs:
+    if 'fill_missing' in kwargs:
         raise ValueError("`fill_missing` not allowed for EmbeddingScorer")
     keys, S = embs.get_S(**kwargs)
     return EmbeddingScorer(keys, S, match=match, mismatch=mismatch)
