@@ -311,14 +311,7 @@ class TextPreprocessor:
             'field_regexes': self.field_regexes
         })
 
-    def process(self, doc, verbose=False, ngram_extractor=None):
-        """
-        Process input text creating n-grams on the processed output.
-
-        kwargs : get_ngrams additional arguments
-        """
-        filtered = []
-
+    def process_generator(self, doc):
         for i in range(len(doc.fields['token'])):
             target = doc.fields[self.field][i]
 
@@ -355,18 +348,35 @@ class TextPreprocessor:
             if self.lower:
                 target = target.lower()
 
-            filtered.append(target)
+            yield target
 
-        return ngram_extractor.get_ngrams(filtered)
+    def process(self, doc, ngram_extractor=None):
+        """
+        Process input text creating n-grams on the processed output.
+        """
+        processed = self.process_generator(doc)
+        if ngram_extractor is not None:
+            yield from ngram_extractor.get_ngrams_generator(list(processed))
+        else:
+            yield from processed
 
-    def process_collections(self, *colls, **kwargs):
+    def process_collections(self, *colls, post_fn=None, **kwargs):
+        """
+        Process entire collections
+
+        post_fn : function that takes generator of ngrams and produces a new generator
+        kwargs : Ngrams additional arguments
+        """
         ngram_extractor = utils.Ngrams(**kwargs)
         summary = self.get_summary()
         summary['ngrams'] = ngram_extractor.get_summary()
         for coll in colls:
             coll.preprocesing_summary = summary
             for doc in coll.get_docs():
-                doc.set_features(self.process(doc, ngram_extractor=ngram_extractor))
+                features = self.process(doc, ngram_extractor=ngram_extractor)
+                if post_fn is not None:
+                    features = post_fn(features)
+                doc.set_features(list(features))
 
 
 class MetaCriterion(type):

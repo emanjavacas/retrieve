@@ -15,15 +15,16 @@ class Ngrams:
     def get_summary(self):
         return (self.min_n, self.max_n, self.skip_k)
 
-    def get_ngrams(self, s):
-        ngrams = []
+    def get_ngrams_generator(self, s):
         for ngram in get_ngrams(
                 s,
                 min_n=self.min_n,
                 max_n=self.max_n,
                 skip_k=self.skip_k):
-            ngrams.append(self.sep.join(ngram))
-        return ngrams
+            yield self.sep.join(ngram)
+
+    def get_ngrams(self, s):
+        return list(self.get_ngrams_generator(s))
 
 
 def get_ngrams(s, min_n=1, max_n=1, skip_k=0):
