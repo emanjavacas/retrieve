@@ -344,8 +344,9 @@ def csls_dense(S, k=10):
 def csls_sparse(S, k=10):
     indices, values = top_k(S, k + 1)
     mean_values = values[:, 1:].mean(1)
-    S = substract_vector(substract_vector(S * 2, mean_values, axis=1),
-                         mean_values, axis=0)
+    S = substract_vector(
+            substract_vector(S * 2, mean_values, axis=1),
+                mean_values, axis=0)
     return S
 
 
@@ -358,7 +359,7 @@ def csls(S, k=10):
 def csls_crosslingual(S, S1, S2, k=10):
     S1_mean = top_k(S1, k + 1)[1][:, 1:].mean(1)
     S2_mean = top_k(S2, k + 1)[1][:, 1:].mean(1)
-    return (2 * S) - S1_mean[:, None] - mean_values[None, :]
+    return (2 * S) - S1_mean[:, None] - S2_mean[None, :]
 
 
 if __name__ == '__main__':
