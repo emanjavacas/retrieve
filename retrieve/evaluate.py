@@ -208,14 +208,31 @@ def get_metrics(inp, refs, at_values=(1, 5, 10, 20), strict=False, input_type='s
     return results
 
 
-def get_thresholded_metrics(inp, refs, thresholds, copy=False, **kwargs):
+def get_thresholded_metrics_approx(sims, refs, thresholds, copy=False, **kwargs):
+    # drop items that could never make it to the top k (add a safety margin)
+    top_k = max(kwargs.get('at_values', [20]))
+    max_items = min(sims.nnz, sims.shape[0] * top_k * 5)
+    perc = 1 - (max_items / len(sims.data))
+    min_th = np.percentile(sims.data, 100 * perc, interpolation='lower')
+    sims = sparse_utils.set_threshold(sims, min_th, copy=True)
+    assert len(sims.data) >= max_items
+
+    return get_thresholded_metrics(sims, refs, thresholds, copy=copy, **kwargs)
+
+
+def get_thresholded_metrics(sims, refs, thresholds, copy=False, **kwargs):
     metrics = collections.defaultdict(list)
 
+    # sort sims
+    ranking, values = sparse_utils.top_k(sims, max(kwargs.get('at_values', [20])))
+    # overwrite input type
+    kwargs['input_type'] = 'ranking'
+
     for th in thresholds:
-        inp = sparse_utils.set_threshold(inp, th, copy=copy)
-        for metric, val in get_metrics(inp, refs, **kwargs).items():
+        x, y = np.where(values < th)
+        ranking[x, y] = -1
+        for metric, val in get_metrics(ranking, refs, **kwargs).items():
             metrics[metric].append(val)
-        metrics['nnz'].append(inp.nnz)
 
     return metrics
 
