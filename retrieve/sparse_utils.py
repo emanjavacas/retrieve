@@ -131,7 +131,7 @@ def sparse_chunks(M, chunk_size):
 
 def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=False):
     """
-    Threshold a matrix on a given (possibly sparse matrix). This function
+    Threshold a given (possibly sparse matrix). This function
     will increase the sparsity of the matrix. If the input is not sparse
     it will default to numpy functionality.
 
@@ -169,6 +169,12 @@ def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=Fals
     if threshold == 0:
         return X
 
+    if not scipy.sparse.issparse(X):
+        if copy:
+            X = np.copy(X)
+        X[np.where(X < threshold)] = 0.0
+        return X
+
     if copy:
         rows, cols, _ = scipy.sparse.find(X >= threshold)
         if len(rows) > 0:
@@ -181,9 +187,6 @@ def set_threshold(X, threshold, sparse_matrix=scipy.sparse.csr_matrix, copy=Fals
             # matrix is empty
             return sparse_matrix(X.shape)
 
-    if not scipy.sparse.issparse(X):
-        X[np.where(X < threshold)] = 0.0
-        return X
 
     if isinstance(X, (scipy.sparse.lil_matrix, scipy.sparse.dok_matrix)):
         raise ValueError("Cannot efficiently drop items on", str(type(X)))

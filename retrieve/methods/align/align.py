@@ -53,9 +53,13 @@ class EmbeddingScorer:
         self.mismatch = mismatch
         self.S = S
         self.d = d
+        self.max_s = S.max()
 
     def get_scores(self, s1, s2):
         return _get_embedding_scores(s1, s2, self.d, self.S, self.match, self.mismatch)
+
+    def get_maximum_score(self, s1, s2):
+        return self.match * self.max_s * min(len(s1), len(s2))
 
 
 def _get_constant_scores(s1, s2, match, mismatch):
@@ -72,6 +76,9 @@ class ConstantScorer:
 
     def get_scores(self, s1, s2):
         return _get_constant_scores(s1, s2, self.match, self.mismatch)
+
+    def get_maximum_score(self, s1, s2):
+        return self.match * min(len(s1), len(s2))
 
 
 @nb.njit
@@ -252,7 +259,7 @@ def get_local_alignment_cython(
 
 def local_alignment(s1, s2, scorer=ConstantScorer(),
                     extend_gap=-1, open_gap=-1, terminal_gap=0,
-                    impl='cython', only_score=False):
+                    impl='cython', only_score=False, normalize=False):
     if len(s1) == 0 or len(s2) == 0:
         if only_score:
             return 0.0
@@ -263,4 +270,14 @@ def local_alignment(s1, s2, scorer=ConstantScorer(),
     else:
         fn = get_local_alignment_numba
 
-    return fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap, only_score)
+    res = fn(s1, s2, scorer, extend_gap, open_gap, terminal_gap, only_score)
+
+    if normalize:
+        max_score = scorer.get_maximum_score(s1, s2)
+        if only_score:
+            return res / max_score
+        else:
+            a, b, score = res
+            return a, b, score / max_score
+
+    return res

@@ -5,6 +5,7 @@ import json
 import collections
 import warnings
 import logging
+from pathlib import Path
 
 from retrieve.data import Doc, Ref, Collection
 
@@ -12,6 +13,10 @@ from retrieve.data import Doc, Ref, Collection
 VULGATE = "https://raw.githubusercontent.com/emanjavacas/cc-patrology/master/output/vulgate.csv"
 
 logger = logging.getLogger(__name__)
+
+
+def get_abspath(path):
+    return os.path.join(Path(__file__).parent.parent, path)
 
 
 def decode_ref(ref):
@@ -27,7 +32,7 @@ def encode_ref(ref):
 
 def read_testament_books(testament='new'):
     books = []
-    with open('data/texts/{}-testament.books'.format(testament)) as f:
+    with open(get_abspath('data/texts/{}-testament.books'.format(testament))) as f:
         for line in f:
             line = line.strip()
             books.append(line)
@@ -36,6 +41,7 @@ def read_testament_books(testament='new'):
 
 def read_bible(path, fields=('token', 'pos', '_', 'lemma'),
                max_verses=-1, sort_docs=True, verse_ids=None):
+
     with open(path) as f:
         docs = []
         for line in f:
@@ -70,19 +76,20 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'),
     return sorted(docs, key=key)
 
 
-def load_vulgate(path='data/texts/vulgate.csv',
+def load_vulgate(path=get_abspath('data/texts/vulgate.csv'),
                  include_blb=False, split_testaments=False, max_targets=None,
                  # read_bible kwargs
                  **kwargs):
 
-    if path == 'data/texts/vulgate.csv' and not os.path.isfile(path):
-        # download from cc-patrology repository
-        try:
-            import urllib
-            logger.info("Downloading vulgate...")
-            urllib.request.urlretrieve(VULGATE, path)
-        except:
-            raise ValueError("Couldn't download vulgate")
+    if path == get_abspath('data/texts/vulgate.csv'):
+        if not os.path.isfile(path):
+            # download from cc-patrology repository
+            try:
+                import urllib
+                logger.info("Downloading vulgate...")
+                urllib.request.urlretrieve(VULGATE, path)
+            except Exception as e:
+                raise ValueError("Couldn't download vulgate", e)
 
     docs = read_bible(path, **kwargs)
     coll = Collection(docs, name=os.path.basename(path))
@@ -132,7 +139,10 @@ def load_vulgate(path='data/texts/vulgate.csv',
     return old, new, refs
 
 
-def load_blb_refs(path='data/texts/blb.refs.json', max_targets=None):
+def load_blb_refs(
+        path=get_abspath('data/texts/blb.refs.json'),
+        max_targets=None):
+
     with open(path) as f:
         output = []
         for ref in json.load(f):

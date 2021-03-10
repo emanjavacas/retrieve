@@ -65,6 +65,14 @@ def _get_fpos_at(unchecked, ranking, at):
     return fpos
 
 
+def _get_tneg_at(ranking, refs, at):
+    pred = np.sum(ranking[:, :at] == -1, axis=1) == at
+    idxs = np.arange(len(ranking))
+    true = np.array(list(set([i for tup, _  in refs for i in tup])))
+    true = idxs[np.in1d(idxs, true, invert=True)]
+    return np.sum(np.in1d(true, pred))
+
+
 def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=False):
     """
     Computes evaluation stats (true positives, false negatives and false positives)
@@ -91,7 +99,7 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
     Output
     ======
     stats : list of dictionaries collecting the statistics, each dictionary is
-        structured as follows: {'tpos': ..., 'fpos': ..., 'fneg': ...}
+        structured as follows: {'tpos': ..., 'fpos': ..., 'fneg': ..., 'tneg': ...}
 
     matches : list of tuples, where each tuple contains a match (q_id, i_d, rank)
         indicating which query doc was correctly retrieved as a reference to which
@@ -119,13 +127,13 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
     >>> matches
     [(2, 3, 2), (3, 3, 1), (3, 5, 3)]
     >>> stats = stats[0]
-    >>> stats['tpos'], stats['fneg'], stats['fpos']
-    (1, 2, 2)
+    >>> stats['tpos'], stats['fneg'], stats['fpos'], stats['tneg']
+    (1, 2, 2, 1)
     >>> stats, matches = ranking_stats_from_tuples(
     ...     ranking, refs, at_values=[5], strict=True)
     >>> stats = stats[0]
-    >>> stats['tpos'], stats['fneg'], stats['fpos']
-    (3, 6, 2)
+    >>> stats['tpos'], stats['fneg'], stats['fpos'], stats['tneg']
+    (3, 6, 2, 1)
     """
     # >>> refs = [([0], [1, 2]), ([2, 3], [3, 5, 6]), ([4], [8])]
     # >>> array([[-1,  -1,  -1,  -1,  -1, -1],  # fneg
@@ -154,11 +162,12 @@ def ranking_stats_from_tuples(ranking, refs, at_values=(1, 5, 10, 20), strict=Fa
                 row_checked, _, _ = zip(*row_matches)
                 checked[at].extend(row_checked)
 
-    # false positives
+    # false positives and true negatives
     for idx, at in enumerate(sorted(at_values)):
         unchecked = np.arange(len(ranking))
         unchecked = unchecked[np.isin(unchecked, np.array(checked[at]), invert=True)]
         stats[idx]['fpos'] += _get_fpos_at(unchecked, ranking, at)
+        stats[idx]['tneg'] += _get_tneg_at(ranking, refs, at)
 
     return stats, matches
 
@@ -195,7 +204,7 @@ def get_metrics(inp, refs, at_values=(1, 5, 10, 20), strict=False, input_type='s
     else:
         ranking = inp[:, :max(at_values)]
 
-    stats, matches = ranking_stats_from_tuples(
+    stats, _ = ranking_stats_from_tuples(
         ranking, refs, at_values=at_values, strict=strict)
 
     results = {}
@@ -221,6 +230,7 @@ def get_thresholded_metrics_approx(sims, refs, thresholds, copy=False, **kwargs)
 
 
 def get_thresholded_metrics(sims, refs, thresholds, copy=False, **kwargs):
+    thresholds = sorted(thresholds)
     metrics = collections.defaultdict(list)
 
     # sort sims
@@ -235,6 +245,9 @@ def get_thresholded_metrics(sims, refs, thresholds, copy=False, **kwargs):
             metrics[metric].append(val)
 
     return metrics
+
+
+
 
 
 @contextlib.contextmanager

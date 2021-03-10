@@ -1,9 +1,13 @@
 
+import logging
 import multiprocessing as mp
 
 import numpy as np
 import scipy.sparse
 import tqdm
+
+
+logger = logging.getLogger(__name__)
 
 
 class Workload:
@@ -39,6 +43,7 @@ def align_collections(queries, index=None, S=None, field=None, processes=1, **kw
     sims = scipy.sparse.dok_matrix((len(queries), len(index)))  # sparse output
 
     processes = mp.cpu_count() if processes < 0 else processes
+    logger.info("Using {} CPUs".format(processes))
     if processes == 1:
         for i, j in tqdm.tqdm(zip(x, y), total=len(x), desc='Local alignment'):
             score = queries[i].local_alignment(

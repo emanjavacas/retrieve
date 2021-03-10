@@ -260,6 +260,49 @@ class Collection:
         return collections.Counter(
             w for doc in self.get_docs() for w in doc.fields[field])
 
+    @classmethod
+    def from_csv(cls, path, drop_diacritics=None, fields=('token', 'lemma', 'pos')):
+        """
+        Create collection from space-separated csv like file
+
+        Sic sic PROPN
+        itur itur PROPN
+        ad ad PROPN
+        astra astra PROPN
+        . . PUNCT
+
+        En en ADP
+        una uno DET
+        mañana mañana NOUN
+        de de ADP
+        Diciembre diciembre NOUN
+
+        using sentence numbers as doc ids
+        """
+        if 'token' not in fields:
+            raise ValueError("At least field `token` must be available")
+        if drop_diacritics is not None:
+            if isinstance(drop_diacritics, str):
+                drop_diacritics = [drop_diacritics]
+            drop_diacritics = set(drop_diacritics)
+
+        docs, cid = [], 0
+
+        with open(path) as f:
+            data = collections.defaultdict(list)
+            for line in f:
+                if line.strip():
+                    for key, val in zip(fields, line.strip().split()):
+                        if drop_diacritics is not None and key in drop_diacritics:
+                            val = utils.drop_string_diacritics(val)
+                        data[key].append(val)
+                elif len(data['token']) > 0:
+                    docs.append(Doc(data, doc_id='s{}'.format(cid)))
+                    data = collections.defaultdict(list)
+                    cid += 1
+
+        return cls(docs)
+
 
 class TextPreprocessor:
     """

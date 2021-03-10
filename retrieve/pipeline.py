@@ -1,11 +1,18 @@
 
+import logging
 import collections
 
-from retrieve import utils
+import numpy as np
+import scipy.sparse as sparse
+
+from retrieve import utils, sparse_utils
 from retrieve.data import Criterion, TextPreprocessor, FeatureSelector
 from retrieve.embeddings import Embeddings
 from retrieve.methods import SetSimilarity, Tfidf, align_collections
 from retrieve.methods import create_embedding_scorer, ConstantScorer
+
+
+logger = logging.getLogger(__name__)
 
 
 def require_embeddings(embs, msg='', **kwargs):
@@ -23,6 +30,47 @@ def get_vocab_from_colls(*colls, field=None):
             output.update(doc.get_features(field=field))
     output, _ = zip(*output.most_common())
     return output
+
+
+class Match:
+    def __init__(self, doc1, doc2, sim):
+        self.doc1 = doc1
+        self.doc2 = doc2
+        self.sim = sim
+
+    def __repr__(self):
+        return 'Similarity -> {:.g}\n\t{}: {}\n\t{}: {}'.format(
+            self.sim,
+            self.doc1.doc_id, self.doc1.text,
+            self.doc2.doc_id, self.doc2.text)
+
+
+class Results:
+    def __init__(self, sims, coll1, coll2):
+        self.sims = sparse.csr_matrix(sims)
+        self.coll1 = coll1
+        self.coll2 = coll2
+
+    @property
+    def nnz(self):
+        return self.sims.nnz
+
+    def keep_top_k(self, k):
+        if self.nnz < k:
+            logger.info("Nothing to drop from similarity matrix")
+            return
+
+        k_val = np.argsort(self.sims)[-k]
+        sparse_utils.set_threshold(self.sims, k_val)
+
+    def drop_sims(self, min_sim):
+        sparse_utils.set_threshold(self.sims, min_sim)
+
+    def get_top_matches(self, n):
+        pass
+
+    def get_matches_higher_than(self, sim):
+        pass
 
 
 def pipeline(coll1, coll2=None,
@@ -61,19 +109,24 @@ def pipeline(coll1, coll2=None,
         # preprocessing
         TextPreprocessor(
             field=field, lower=lower, stopwords=stopwords, stop_field=stop_field,
-        ).process_collections(*colls, min_n=min_n, max_n=max_n, skip_k=skip_k, sep=sep)
+        ).process_collections(
+            *colls, min_n=min_n, max_n=max_n, skip_k=skip_k, sep=sep)
         fsel = FeatureSelector(*colls)
+        # get selected vocabulary
         vocab = fsel.filter_collections(*colls, criterion=criterion)
 
         stats['preprocessing'] = timer(desc='Preprocessing')
 
         # similarities
-        if method == 'set-based':
+        # - set-based method
+        if method.startswith('set'):
             coll1_feats = coll1.get_features(cast=set)
             coll2_feats = coll2.get_features(cast=set) if coll2 else coll1_feats
             sims = SetSimilarity(threshold, **method_params).get_similarities(
                 coll1_feats, coll2_feats, processes=processes)
-        elif method == 'vsm-based':
+
+        # - vsm-based method
+        elif method.startswith('vsm'):
             coll1_feats = coll1.get_features()
             coll2_feats = coll2.get_features() if coll2 is not None else coll1_feats
             tfidf = Tfidf(vocab, **method_params).fit(coll1_feats + coll2_feats)
@@ -89,7 +142,9 @@ def pipeline(coll1, coll2=None,
             else:
                 sims = tfidf.get_similarities(
                     coll1_feats, coll2_feats, threshold=threshold)
-        elif method == 'alignment-based':
+
+        # - alignment-based
+        elif method.startswith('alignment'):
             # get scorer
             if 'scorer' in method_params:
                 scorer = method_params['scorer']
@@ -104,8 +159,9 @@ def pipeline(coll1, coll2=None,
                 scorer = ConstantScorer(
                     **{key: val for key, val in method_params.items()
                        if key in set(['match', 'mismatch'])})
+
             if precomputed_sims is not None:
-                print("Computing {} alignments...".format(precomputed_sims.nnz))
+                logger.info("Computing {} alignments...".format(precomputed_sims.nnz))
             sims = align_collections(
                 coll1, coll2,
                 S=precomputed_sims, field=field, processes=processes, scorer=scorer,

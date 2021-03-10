@@ -1,8 +1,12 @@
 
+import logging
 import time
 import contextlib
 import itertools
 import unicodedata
+
+
+logger = logging.getLogger(__name__)
 
 
 class Ngrams:
@@ -121,7 +125,7 @@ def timer(print_on_leave=True, desc='', fmt='took {:0.1f} secs in total', **kwar
         nonlocal last
         desc = ' - ' + (desc + ' ' if desc else desc)
         took = time.time() - last
-        print(desc + fmt.format(took), **kwargs)
+        logger.info(desc + fmt.format(took), **kwargs)
         last = time.time()
         return took
 
@@ -129,4 +133,4 @@ def timer(print_on_leave=True, desc='', fmt='took {:0.1f} secs in total', **kwar
 
     desc = desc + ' ' if desc else desc
 
-    print(desc + fmt.format(time.time() - start), **kwargs)
+    logger.info(desc + fmt.format(time.time() - start), **kwargs)

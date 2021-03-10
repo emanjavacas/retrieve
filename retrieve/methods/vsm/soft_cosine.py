@@ -1,5 +1,6 @@
 
 import math
+import logging
 
 import numpy as np
 import scipy.sparse
@@ -8,6 +9,9 @@ from joblib import Parallel, delayed, effective_n_jobs
 import tqdm
 
 from ...sparse_utils import sparse_chunks, set_threshold
+
+
+logger = logging.getLogger(__name__)
 
 
 def soft_cosine_simple(query, index, S):
@@ -179,6 +183,7 @@ def parallel_soft_cosine(queries, index, S, threshold=0.0, n_jobs=-1):
     sims = scipy.sparse.lil_matrix((n, m)) if is_S_sparse else np.zeros((n, m))
 
     n_chunks = effective_n_jobs(n_jobs)
+    logger.info("Using {} CPUs".format(n_chunks))
     Parallel(backend='threading', n_jobs=n_chunks)(
         fd(sims, i_start, i_stop, threshold,
            # fn

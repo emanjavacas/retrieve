@@ -30,7 +30,7 @@ class VSM:
 
     def get_similarities(self, queries, index,
                          threshold=0.25, metric='linear',
-                         chunk_size=-1, disable_bar=False, **kwargs):
+                         chunk_size=500, disable_bar=False, **kwargs):
         """
         Get similarities according to specified kernel.
 

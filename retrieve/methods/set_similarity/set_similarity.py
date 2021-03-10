@@ -108,7 +108,7 @@ class SetSimilarity:
         self.fit(index, queries=queries)
 
         processes = mp.cpu_count() if processes < 0 else processes
-        logger.info("Using {} cpus".format(processes))
+        logger.info("Using {} CPUs".format(processes))
         if processes == 1:
             sims = dok_matrix((len(queries), len(index)))
             for idx in tqdm(range(len(queries)), total=len(queries),
