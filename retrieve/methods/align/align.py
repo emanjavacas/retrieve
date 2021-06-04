@@ -114,7 +114,7 @@ def compute_input_matrices(
 
             # pick best move
             score, move = 0.0, 0
-            for cscore, cmove in [(0, END),
+            for cscore, cmove in [(0.0, END),
                                   (hscore, HGAP),
                                   (vscore, VGAP),
                                   (mscore, MATCH)]:
