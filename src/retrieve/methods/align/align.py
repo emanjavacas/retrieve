@@ -10,13 +10,11 @@ import logging
 import itertools
 from itertools import product
 
-import tqdm
 import numba as nb
-import scipy.sparse
 import numpy as np
 
 import pyximport; pyximport.install()  # noqa: E702
-from . import _align
+import _align
 
 
 logger = logging.getLogger(__name__)

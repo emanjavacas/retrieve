@@ -3,6 +3,7 @@ import time
 import gzip
 import csv
 import logging
+import importlib.resources
 
 import tqdm
 import pandas as pd
@@ -171,6 +172,13 @@ class Embeddings:
         """
         df = load_embeddings(path, vocab=vocab)
         return cls(list(df.keys()), np.array(df).T)
+
+    @classmethod
+    def from_resource(cls, path, vocab=None):
+        if not importlib.resources.is_resource('retrieve.resources.misc', path):
+            raise ValueError("Unknown resource: {}".format(path))
+        with importlib.resources.path('retrieve.resources.misc', path) as f:
+            return cls.from_file(str(f), vocab=vocab)
 
     def get_indices(self, words):
         keys, indices = {}, []

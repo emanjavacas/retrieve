@@ -18,7 +18,7 @@ from sklearn.metrics import pairwise_kernels
 class TestSoftCosine(unittest.TestCase):
     def setUp(self):
         # load
-        vulg = load_vulgate(include_blb=True, max_verses=1000)
+        vulg = load_vulgate(max_verses=1000)
         # preprocess
         TextPreprocessor().process_collections(vulg, min_n=1, max_n=1)
         # drop features and get vocabulary
@@ -31,8 +31,8 @@ class TestSoftCosine(unittest.TestCase):
         feats = Tfidf(vocab).fit(feats).transform(feats)
         query, index = feats[:feats.shape[0]//2], feats[feats.shape[0]//2:]
         # load embeddings, make sure S is in same order as vocab
-        embs = Embeddings.from_file(
-            'data/latin.lemma.ft.dim100.mc2.embeddings.gz', vocab=vocab)
+        embs = Embeddings.from_resource(
+            'latin.lemma.ft.dim100.mc2.embeddings.gz', vocab=vocab)
 
         self.embs = embs
         self.query = query

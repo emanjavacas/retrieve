@@ -10,7 +10,7 @@ from retrieve.corpora import load_vulgate
 class TestCriterion(unittest.TestCase):
     def setUp(self):
         collection = load_vulgate()
-        stops = utils.Stopwords('data/stop/latin.stop')
+        stops = utils.Stopwords('latin.stop')
         processor = TextPreprocessor(stopwords=stops, field_regexes={'token': '[a-z]+'})
         processor.process_collections(collection)
         self.fsel = FeatureSelector(collection)

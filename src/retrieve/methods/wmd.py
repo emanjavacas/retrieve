@@ -1,7 +1,12 @@
 
 import collections
 import numpy as np
-import pyemd
+
+try:
+    import pyemd
+except ModuleNotFoundError:
+    # pyemd is not installed
+    pass
 
 
 def get_wmd_histograms(s1, s2, w2i):

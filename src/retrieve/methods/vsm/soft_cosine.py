@@ -225,8 +225,8 @@ if __name__ == '__main__':
     query, index = feats[:10000], feats[10000:20000]
     vocab = [ft for ft in tfidf.vectorizer.get_feature_names() if len(ft.split()) == 1]
     # load embeddings, make sure S is in same order as vocab
-    embs = Embeddings.from_file(
-        'data/embeddings/latin.lemma.nopunc.300.bin', vocab=vocab)
+    embs = Embeddings.from_resource(
+        'latin.lemma.ft.dim100.mc2.embeddings.gz', vocab=vocab)
 
     for cutoff in [0.25, 0.5, 0.7, 0.8, 0.85, 0.9, 0.95]:
         S = embs.get_S(

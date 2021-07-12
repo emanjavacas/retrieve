@@ -1,9 +1,11 @@
 
+import os
 import logging
 import time
 import contextlib
 import itertools
 import unicodedata
+from importlib.resources import is_resource, open_text
 
 
 logger = logging.getLogger(__name__)
@@ -85,17 +87,25 @@ def load_stopwords(path, drop_diacritics=False):
     """
     Load stopwords from vertical format file. Ignore comments (#) and (?) doubted
     """
+    if os.path.isfile(path):
+        with open(path) as f:
+            lines = list(f)
+    elif is_resource('retrieve.resources.stop', path):
+        # try with package resource
+        lines = list(open_text('retrieve.resources.stop', path))
+    else:
+        raise ValueError("Couldn't find file: '{}'".format(path))
+
     stopwords = []
-    with open(path) as f:
-        for line in f:
-            line = line.strip()
-            if line.startswith('?') or line.startswith('#'):
-                continue
-            if not line:
-                continue
-            if drop_diacritics:
-                line = drop_string_diacritics(line)
-            stopwords.append(line)
+    for line in lines:
+        line = line.strip()
+        if line.startswith('?') or line.startswith('#'):
+            continue
+        if not line:
+            continue
+        if drop_diacritics:
+            line = drop_string_diacritics(line)
+        stopwords.append(line)
     return set(stopwords)
 
 

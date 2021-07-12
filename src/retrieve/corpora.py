@@ -1,22 +1,18 @@
 
+import io
 import os
 import glob
 import json
 import collections
 import warnings
 import logging
-from pathlib import Path
+import zipfile
+from importlib.resources import open_text, open_binary
 
 from retrieve.data import Doc, Ref, Collection
 
 
-VULGATE = "https://raw.githubusercontent.com/emanjavacas/cc-patrology/master/output/vulgate.csv"
-
 logger = logging.getLogger(__name__)
-
-
-def get_abspath(path):
-    return os.path.join(Path(__file__).parent.parent, path)
 
 
 def decode_ref(ref):
@@ -30,38 +26,44 @@ def encode_ref(ref):
     return '-'.join(book.split()) + '_' + '_'.join([chapter, verse])
 
 
-def read_testament_books(testament='new'):
+def read_testament_books(testament):
+    lines = open_text('retrieve.resources.misc', '{}-testament.books'.format(testament)).read()
     books = []
-    with open(get_abspath('data/texts/{}-testament.books'.format(testament))) as f:
-        for line in f:
-            line = line.strip()
-            books.append(line)
+    for line in lines.split('\n'):
+        books.append(line.strip())
     return books
 
+read_testament_books.__test__ = False # Tell nose to ignore test
 
-def read_bible(path, fields=('token', 'pos', '_', 'lemma'),
+
+def read_bible(path_or_file, fields=('token', 'pos', '_', 'lemma'),
                max_verses=-1, sort_docs=True, verse_ids=None):
 
-    with open(path) as f:
-        docs = []
-        for line in f:
-            if not line.strip():
-                continue
-            if max_verses > 0 and len(docs) >= max_verses:
-                break
-            book, chapter, verse, *data = line.strip().split('\t')
-            if verse_ids is not None and (book, chapter, verse) not in verse_ids:
-                continue
-            data = [field.split() for field in data]
-            if len(data) != len(fields):
-                raise ValueError(
-                    "Expected {} metadata fields, but got {}. File: {}"
-                    .format(len(fields), len(data), path))
-            doc_id = book, chapter, verse
-            try:
-                docs.append(Doc(fields=dict(zip(fields, data)), doc_id=doc_id))
-            except ValueError as e:
-                warnings.warn("Ignoring document {}".format(' '.join(doc_id)))
+    if isinstance(path_or_file, str):
+        f = open(path_or_file)
+    else: # assume is a stream
+        f = path_or_file
+
+    docs = []
+    for line in f:
+        line = line.strip()
+        if not line:
+            continue
+        if max_verses > 0 and len(docs) >= max_verses:
+            break
+        book, chapter, verse, *data = line.split('\t')
+        if verse_ids is not None and (book, chapter, verse) not in verse_ids:
+            continue
+        data = [field.split() for field in data]
+        if len(data) != len(fields):
+            raise ValueError(
+                "Expected {} metadata fields, but got {}. File: {}"
+                .format(len(fields), len(data)))
+        doc_id = book, chapter, verse
+        try:
+            docs.append(Doc(fields=dict(zip(fields, data)), doc_id=doc_id))
+        except ValueError as e:
+            warnings.warn("Ignoring document {}".format(' '.join(doc_id)))
 
     if not sort_docs:
         return docs
@@ -76,23 +78,15 @@ def read_bible(path, fields=('token', 'pos', '_', 'lemma'),
     return sorted(docs, key=key)
 
 
-def load_vulgate(path=get_abspath('data/texts/vulgate.csv'),
-                 include_blb=False, split_testaments=False, max_targets=None,
-                 # read_bible kwargs
-                 **kwargs):
+def read_vulgate(**kwargs):
+    zipf = zipfile.ZipFile(open_binary('retrieve.resources.texts', 'vulgate.zip'))
+    return read_bible(io.StringIO(zipf.read('vulgate.csv').decode()), **kwargs)
 
-    if path == get_abspath('data/texts/vulgate.csv'):
-        if not os.path.isfile(path):
-            # download from cc-patrology repository
-            try:
-                import urllib
-                logger.info("Downloading vulgate...")
-                urllib.request.urlretrieve(VULGATE, path)
-            except Exception as e:
-                raise ValueError("Couldn't download vulgate", e)
 
-    docs = read_bible(path, **kwargs)
-    coll = Collection(docs, name=os.path.basename(path))
+def load_bible(docs, name='bible',
+               include_blb=False, split_testaments=False, max_targets=None):
+
+    coll = Collection(docs, name=name)
     if not split_testaments:
         return coll
 
@@ -139,30 +133,34 @@ def load_vulgate(path=get_abspath('data/texts/vulgate.csv'),
     return old, new, refs
 
 
-def load_blb_refs(
-        path=get_abspath('data/texts/blb.refs.json'),
-        max_targets=None):
+def load_vulgate(split_testaments=False, max_targets=None, **kwargs):
+    return load_bible(
+        read_vulgate(**kwargs),
+        include_blb=False, split_testaments=split_testaments, max_targets=max_targets)
 
-    with open(path) as f:
-        output = []
-        for ref in json.load(f):
-            source = [decode_ref(s_ref) for s_ref in ref['source']]
-            target = [decode_ref(t_ref) for t_ref in ref['target']]
-            ref_type = ref['ref_type']
-            if max_targets is not None:
-                if (len(source) > max_targets or len(target) > max_targets):
-                    continue
-            output.append({'source': source, 'target': target, 'ref_type': ref_type})
+
+def load_blb_refs(max_targets=None):
+    data = open_text('retrieve.resources.misc', 'blb.refs.json').read()
+
+    output = []
+    for ref in json.loads(data):
+        source = [decode_ref(s_ref) for s_ref in ref['source']]
+        target = [decode_ref(t_ref) for t_ref in ref['target']]
+        ref_type = ref['ref_type']
+        if max_targets is not None:
+            if (len(source) > max_targets or len(target) > max_targets):
+                continue
+        output.append({'source': source, 'target': target, 'ref_type': ref_type})
 
     return output
 
 
-def read_doc(path, fields=('token', 'pos', '_', 'lemma')):
+def read_doc(path, fields=('token', 'pos', '_', 'lemma'), sep='\t'):
     output = collections.defaultdict(list)
     with open(path) as f:
         for line in f:
             try:
-                data = line.strip().split('\t')
+                data = line.strip().split(sep)
                 if len(data) != len(fields):
                     raise ValueError(
                         "Expected {} metadata fields, but got {}. File: {}"
@@ -206,12 +204,10 @@ def shingle_doc(doc, f_id, overlap=10, window=20):
 
 
 def load_bernard(directory='data/texts/bernard',
-                 bible_path='data/texts/vulgate.csv',
                  max_targets=None,
-                 read_bible_kwargs={},
                  **kwargs):
 
-    bible = Collection(read_bible(bible_path, **read_bible_kwargs), name='Vulgate')
+    bible = Collection(read_vulgate(), name='Vulgate')
     shingled_docs, shingled_refs = [], []
     for path in glob.glob(os.path.join(directory, '*.txt')):
         refs = read_refs(path.replace('.txt', '.refs.json'))

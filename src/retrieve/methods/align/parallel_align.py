@@ -83,7 +83,8 @@ if __name__ == '__main__':
     vocab = FeatureSelector(vulg).filter_collections(
         vulg, (Criterion.DF >= 2) & (Criterion.FREQ >= 5))
     # load embeddings, make sure S is in same order as vocab
-    embs = Embeddings.from_csv('latin.lemma.embeddings', vocab=vocab)
+    embs = Embeddings.from_resource(
+        'latin.lemma.ft.dim100.mc2.embeddings.gz', vocab=vocab)
     # embedding scorer
     scorer = create_embedding_scorer(embs)
 
