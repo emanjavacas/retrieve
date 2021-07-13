@@ -295,7 +295,6 @@ class Collection:
 
         return cls(docs)
 
-
     @classmethod
     def from_csv(cls, *paths, drop_diacritics=None, 
                  fields=('token', 'lemma', 'pos'), sep='\t', read_header=False,
@@ -353,7 +352,22 @@ class TextPreprocessor:
                  drop_punctuation=True, punct_field='token',
                  replace_unk=False, drop_unk=False, unk_token='$unk$', unk_field='token',
                  stopwords=None, stop_field='lemma'):
-
+        """
+        field : str, what field to use to extract features
+        lower : bool, whether to lowercase input text
+        field_regexes : dict (field : regex), a dict mapping fields to regexes that tokens
+            should match in order to not be filtered out
+        drop_punctuation : bool, whether to drop punctuation
+        punct_field : str, field that should be used to check for punctuation
+        replace_unk : bool, whether to replace unknown lemmas with the corresponding token
+            from the field specified by `unk_field`
+        drop_unk : bool, whether to remove tokens with unknown lemmas
+        unk_token : str, token used to represent unknown lemmas in the lemma field
+        unk_field : str, field to use for the replacement of the unknown lemma 
+            if `replace_unk` is True.
+        stopwords : retrieve.utils.Stopwords, stopwords to filter out
+        stop_field : str, field to be used for checking stopwords
+        """
         self.field = field
         self.lower = lower
         # punctuation

@@ -2,6 +2,7 @@
 import os
 
 import scipy.sparse
+import numpy as np
 
 import flask
 from flask import Flask
@@ -25,7 +26,7 @@ def extract_matching_words(doc1, doc2):
 
 class VisualizerApp:
     def __init__(self, sims, coll1, coll2=None, 
-                 sim_range=(None, None),
+                 sim_range=(None, None), max_points=5000, sample=False,
                  host='localhost', port=5000):
         """
         Dot-plot visualization app
@@ -47,6 +48,8 @@ class VisualizerApp:
             self.sims = sims
 
         self.min_sim, self.max_sim = sim_range
+        self.max_points = max_points
+        self.sample = sample
 
         # app
         self.host = host
@@ -88,9 +91,19 @@ class VisualizerApp:
 
     def heatmap(self):
         rows, cols, vals = scipy.sparse.find(self.sims)
+        n_points, sampled = len(vals), False
+        if len(vals) >= self.max_points:
+            sampled = True
+            if self.sample:
+                index = np.random.choice(
+                    np.arange(len(vals)), size=self.max_points, replace=False)
+            else:
+                index = np.argsort(vals)[-self.max_points:]
+            rows, cols, vals = rows[index], cols[index], vals[index]
+
         matches = list(zip(rows.tolist(), cols.tolist(), vals.tolist()))
-        min_sim = float(self.sims.min()) if self.min_sim is None else self.min_sim
-        max_sim = float(self.sims.max()) if self.max_sim is None else self.max_sim
+        min_sim = float(vals.min()) if self.min_sim is None else self.min_sim
+        max_sim = float(vals.max()) if self.max_sim is None else self.max_sim
         data = {'points': [{'row': row,
                             'col': col,
                             'row_id': self.coll1[row].get_printable_doc_id(),
@@ -100,9 +113,11 @@ class VisualizerApp:
                 'ncol': len(self.coll2),
                 'rowName': self.coll1.name,
                 'colName': self.coll2.name,
-                'meanSim': float(self.sims.data.mean()),
+                'meanSim': float(vals.mean()),
                 'maxSim': max_sim,
-                'minSim': min_sim}
+                'minSim': min_sim,
+                'sampled': sampled,
+                'nPoints': n_points}
 
         return data
 

@@ -3,6 +3,7 @@ import logging
 import collections
 
 import numpy as np
+from numpy.lib.function_base import _sinc_dispatcher
 import scipy.sparse as sparse
 
 from retrieve import utils, sparse_utils
@@ -39,7 +40,7 @@ class Match:
         self.sim = sim
 
     def __repr__(self):
-        return 'Similarity -> {:.g}\n\t{}: {}\n\t{}: {}'.format(
+        return 'Similarity -> {:.5f}\n\t{}: {}\n\t{}: {}'.format(
             self.sim,
             self.doc1.doc_id, self.doc1.text,
             self.doc2.doc_id, self.doc2.text)
@@ -66,11 +67,20 @@ class Results:
     def drop_sims(self, min_sim):
         sparse_utils.set_threshold(self.sims, min_sim)
 
-    def get_top_matches(self, n):
-        pass
-
-    def get_matches_higher_than(self, sim):
-        pass
+    def get_top_matches(self, n=None, min_sim=0, max_sim=None, sample=False):
+        x, y, _ = sparse.find(self.sims > min_sim)
+        score = self.sims[x, y]
+        # find returns a scipy matrix instead of a np array
+        score = np.array(score)[0]
+        if max_sim is not None:
+            index, = np.where(score <= max_sim)
+            x, y, score = x[index], y[index], score[index]
+        index = np.argsort(score)[::-1]
+        if sample and n is not None:
+            index = np.random.choice(np.arange(len(index)), size=n, replace=False)
+        n = n or len(score)
+        for i in index[:n]:
+            yield Match(self.coll1[x[i]], self.coll2[y[i]], score[i])
 
 
 def pipeline(coll1, coll2=None,
