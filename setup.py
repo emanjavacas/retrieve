@@ -5,10 +5,10 @@ from Cython.Build import cythonize
 
 setup(
     name='retrieve',
-    version='0.1.1',    
+    version='0.1.3',
     description='A Python package to perform Text Reuse Detection',
     url='https://github.com/emanjavacas/retrieve',
-    download_url='https://github.com/emanjavacas/retrieve/archive/refs/tags/v0.1.2.tar.gz',
+    download_url='https://github.com/emanjavacas/retrieve/archive/refs/tags/v0.1.3.tar.gz',
     author='Enrique Manjavacas',
     license='MIT',
     package_dir={'': 'src'},
