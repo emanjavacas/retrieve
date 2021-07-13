@@ -13,8 +13,12 @@ from itertools import product
 import numba as nb
 import numpy as np
 
-import pyximport; pyximport.install()  # noqa: E702
-import _align
+try:
+    import _align
+except ModuleNotFoundError:
+    import warnings
+    warnings.warn("Couldn't find cython 'align' extension, defaulting to numba implementation")
+    _align = None
 
 
 logger = logging.getLogger(__name__)
@@ -63,17 +67,23 @@ class EmbeddingScorer:
 def _get_constant_scores(s1, s2, match, mismatch):
     scores = np.zeros((len(s1), len(s2)))
     for (i, a), (j, b) in product(enumerate(s1), enumerate(s2)):
-        scores[i, j] = match if a == b else mismatch
+        scores[i, j] = match[i] if a == b else mismatch
     return scores
 
 
 class ConstantScorer:
-    def __init__(self, match=2, mismatch=-1):
+    def __init__(self, match=2, mismatch=-1, manual_scores=None):
         self.match = match
         self.mismatch = mismatch
+        self.manual_scores = manual_scores
 
     def get_scores(self, s1, s2):
-        return _get_constant_scores(s1, s2, self.match, self.mismatch)
+        # matches can depend on the actual word (e.g. stop-words)
+        if self.manual_scores is not None:
+            match = [self.manual_scores.get(w, self.match) for w in s1]
+        else:
+            match = len(s1) * [self.match]
+        return _get_constant_scores(s1, s2, match, self.mismatch)
 
     def get_maximum_score(self, s1, s2):
         return self.match * min(len(s1), len(s2))
@@ -201,7 +211,7 @@ def get_horizontal_alignment(s1, s2, a1=None, a2=None, gap_sym=GAP_SYM, **kwargs
         a1, a2, _ = local_alignment(s1, s2, **kwargs)
 
     # empty alignment
-    if not a1 or not a2:
+    if not a1 or not a2 or len(s1) < 2:
         return ' '.join(s1), ' ', ' '.join(s2)
 
     # find start of both seqs
@@ -263,7 +273,7 @@ def local_alignment(s1, s2, scorer=ConstantScorer(),
             return 0.0
         return [], [], 0.0
 
-    if impl == 'cython':
+    if impl == 'cython' and _align is not None:
         fn = get_local_alignment_cython
     else:
         fn = get_local_alignment_numba

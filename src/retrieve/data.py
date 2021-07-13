@@ -129,6 +129,14 @@ class Doc:
 
         return text
 
+    def print_alignment(self, doc, **kwargs):
+        a1 = a2 = None
+        if 'lemma' in self.fields and 'lemma' in doc.fields:
+            a1, a2, _ = local_alignment(self.get_features('lemma'), doc.get_features('lemma'), **kwargs)
+        s1, al, s2 = get_horizontal_alignment(
+            self.get_features('token'), doc.get_features('token'), a1=a1, a2=a2, **kwargs)
+        print(s1 + '\n' + al + '\n' + s2)
+
 
 def _wrap_fn(fn, use_counter=False):
     def wrapped(this, that, field='lemma', **kwargs):
@@ -261,8 +269,43 @@ class Collection:
             w for doc in self.get_docs() for w in doc.fields[field])
 
     @classmethod
-    def from_csv(cls, path, drop_diacritics=None, fields=('token', 'lemma', 'pos')):
+    def from_file(cls, *paths, 
+                  # shingling
+                  do_shingling=False, shingle_overlap=10, shingle_window=20):
+
+        docs = []
+        for path in paths:
+            lines = []
+            with open(path) as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    lines.append(line.split())
+            if do_shingling:
+                for doc in shingle_docs(
+                        {'token': [tok for l in lines for tok in l]}, path,
+                        overlap=shingle_overlap, window=shingle_window):
+                    docs.append(doc)
+            else:
+                d_id = 0
+                for line in lines:
+                    docs.append(Doc({'token': line}, doc_id=(path, d_id)))
+                    d_id += 1
+
+        return cls(docs)
+
+
+    @classmethod
+    def from_csv(cls, *paths, drop_diacritics=None, 
+                 fields=('token', 'lemma', 'pos'), sep='\t', read_header=False,
+                 ignore_empty_lines=False, 
+                 # shingling
+                 do_shingling=False, shingle_overlap=10, shingle_window=20):
         """
+        Arguments
+        =========
+
         Create collection from space-separated csv like file
 
         Sic sic PROPN
@@ -279,27 +322,19 @@ class Collection:
 
         using sentence numbers as doc ids
         """
-        if 'token' not in fields:
-            raise ValueError("At least field `token` must be available")
-        if drop_diacritics is not None:
-            if isinstance(drop_diacritics, str):
-                drop_diacritics = [drop_diacritics]
-            drop_diacritics = set(drop_diacritics)
-
-        docs, cid = [], 0
-
-        with open(path) as f:
-            data = collections.defaultdict(list)
-            for line in f:
-                if line.strip():
-                    for key, val in zip(fields, line.strip().split()):
-                        if drop_diacritics is not None and key in drop_diacritics:
-                            val = utils.drop_string_diacritics(val)
-                        data[key].append(val)
-                elif len(data['token']) > 0:
-                    docs.append(Doc(data, doc_id='s{}'.format(cid)))
-                    data = collections.defaultdict(list)
-                    cid += 1
+        docs = []
+        for path in paths:
+            d_id = 0
+            for doc in read_csv(path,
+                    fields=fields, sep=sep, read_header=read_header, 
+                    ignore_empty_lines=ignore_empty_lines):
+                if do_shingling:
+                    for shingle in shingle_docs(
+                            doc, path, overlap=shingle_overlap, window=shingle_window):
+                        docs.append(shingle)
+                else:
+                    docs.append(Doc(doc, doc_id=(path, d_id)))
+                    d_id += 1
 
         return cls(docs)
 
@@ -584,3 +619,95 @@ class FeatureSelector:
         vocab = self.get_vocab(criterion)
         for text in texts:
             yield [ft for ft in text if ft in vocab]
+
+
+def read_csv(path, drop_diacritics=None,
+             fields=('token', 'pos', '_', 'lemma'), sep='\t', 
+             read_header=False, ignore_empty_lines=False):
+    """
+    Read sentences from csv file. Assumes that empty lines correspond to sentence
+    boundaries. This functionality can be turned off with `ignore_empty_lines`.
+    The function `shingle_docs` can be used to segment a dataset read
+    with this function if no sentence segmentation is present in the csv file.
+
+    Arguments
+    =========
+
+    path : str, path to file
+    drop_diacritics : iterable or None (optional), fields of the csv file for which
+        diacritics should be ignored.
+    fields : tuple (optional), field names corresponding to the columns in the csv.
+        Ignored if `read_header` is True.
+    sep : str, separator
+    read_header : bool, whether to use the header to read the fields
+    """
+    output = []
+    c_id = 0
+
+    with open(path) as f:
+        if read_header:
+            fields = next(f).strip().split(sep)
+        if 'token' not in fields:
+            raise ValueError("At least field `token` must be available")
+        if drop_diacritics is not None:
+            if isinstance(drop_diacritics, str):
+                drop_diacritics = [drop_diacritics]
+            drop_diacritics = set(drop_diacritics)
+
+        sent = collections.defaultdict(list)
+        for line in f:
+            line = line.strip()
+            if not line:
+                if ignore_empty_lines:
+                    continue
+                elif sent:
+                    output.append(dict(sent))
+                    sent = collections.defaultdict(list)
+                    continue
+                else:
+                    # unexpected empty line at the beginning
+                    continue
+
+            data = line.split(sep)
+            if len(data) != len(fields):
+                raise ValueError(
+                    "Expected {} metadata fields, but got {}. File: {}"
+                    .format(len(fields), len(data), path))
+
+            for key, val in zip(fields, data):
+                if key == '_':
+                    continue
+                if drop_diacritics is not None and key in drop_diacritics:
+                    val = utils.drop_string_diacritics(val)
+                sent[key].append(val)
+
+    return output
+
+
+def shingle_docs(doc, f_id, overlap=10, window=20):
+    """
+    Produce shingles from a given input dictionary with fields.
+
+    Arguments
+    =========
+    doc : Doc, instance of a (possibly very long) document
+    f_id : str, identifier for the input file, for example, the input file path
+    overlap : int, the overlap in tokens over consecutive documents
+    window : int, the size of the shingled documents
+    """
+
+    output = []
+    n_words = len(doc[next(iter(doc.keys()))])
+    for start in range(0, n_words, window - overlap):
+        # doc might be smaller than window
+        stop = min(start + window, n_words)
+        assert start < stop, (start, stop, f_id)
+        # doc id
+        doc_id = f_id, (start, stop)
+        # prepare doc
+        fields = {key: vals[start:stop] for key, vals in doc.items()}
+        fields['ids'] = list(range(start, stop))
+
+        output.append(Doc(fields=fields, doc_id=doc_id))
+
+    return output

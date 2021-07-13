@@ -57,7 +57,7 @@ def read_bible(path_or_file, fields=('token', 'pos', '_', 'lemma'),
         data = [field.split() for field in data]
         if len(data) != len(fields):
             raise ValueError(
-                "Expected {} metadata fields, but got {}. File: {}"
+                "Expected {} metadata fields, but got {}."
                 .format(len(fields), len(data)))
         doc_id = book, chapter, verse
         try:

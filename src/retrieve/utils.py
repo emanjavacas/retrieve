@@ -106,6 +106,7 @@ def load_stopwords(path, drop_diacritics=False):
         if drop_diacritics:
             line = drop_string_diacritics(line)
         stopwords.append(line)
+
     return set(stopwords)
 
 

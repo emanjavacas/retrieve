@@ -161,7 +161,7 @@ class Embeddings:
         path : str, path to file with embeddings in csv format
             (word is assumed to go in first column)
 
-        vocab : obtional, subset of words to load
+        vocab : optional, subset of words to load
 
         Output
         ======
@@ -179,6 +179,12 @@ class Embeddings:
             raise ValueError("Unknown resource: {}".format(path))
         with importlib.resources.path('retrieve.resources.misc', path) as f:
             return cls.from_file(str(f), vocab=vocab)
+
+    def to_csv(self, path):
+        with open(path, 'w') as f:
+            for idx, word in sorted(self.id2word.items()):
+                vec = ["{:.6}".format(i) for i in self.vectors[idx].tolist()]
+                f.write(word + '\t' + ' '.join(vec) + '\n')
 
     def get_indices(self, words):
         keys, indices = {}, []
