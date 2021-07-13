@@ -8,7 +8,7 @@ setup(
     version='0.1.1',    
     description='A Python package to perform Text Reuse Detection',
     url='https://github.com/emanjavacas/retrieve',
-    download_url='https://github.com/emanjavacas/retrieve/archive/refs/tags/v0.1.0.tar.gz',
+    download_url='https://github.com/emanjavacas/retrieve/archive/refs/tags/v0.1.1.tar.gz',
     author='Enrique Manjavacas',
     license='MIT',
     package_dir={'': 'src'},
