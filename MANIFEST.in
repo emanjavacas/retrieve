@@ -1,3 +1,5 @@
 include LICENSE
 include README.md
 recursive-include src/retrieve/resources/ *.json *.books *.stop *.gz *.zip
+graft src/retrieve/viz/static
+graft src/retrieve/viz/templates
