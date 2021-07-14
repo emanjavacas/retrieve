@@ -3,7 +3,11 @@ import time
 import gzip
 import csv
 import logging
-import importlib.resources
+import sys
+if sys.version_info.minor < 7:
+    import importlib_resources
+else:
+    import importlib.resources as importlib_resources
 
 import tqdm
 import pandas as pd
@@ -175,9 +179,9 @@ class Embeddings:
 
     @classmethod
     def from_resource(cls, path, vocab=None):
-        if not importlib.resources.is_resource('retrieve.resources.misc', path):
+        if not importlib_resources.is_resource('retrieve.resources.misc', path):
             raise ValueError("Unknown resource: {}".format(path))
-        with importlib.resources.path('retrieve.resources.misc', path) as f:
+        with importlib_resources.path('retrieve.resources.misc', path) as f:
             return cls.from_file(str(f), vocab=vocab)
 
     def to_csv(self, path):
