@@ -5,7 +5,11 @@ import time
 import contextlib
 import itertools
 import unicodedata
-from importlib.resources import is_resource, open_text
+import sys
+if sys.version_info.minor < 7:
+    from importlib_resources import open_text, is_resource
+else:
+    from importlib.resources import open_text, is_resource
 
 
 logger = logging.getLogger(__name__)

@@ -7,7 +7,11 @@ import collections
 import warnings
 import logging
 import zipfile
-from importlib.resources import open_text, open_binary
+import sys
+if sys.version_info.minor < 7:
+    from importlib_resources import open_text, open_binary
+else:
+    from importlib.resources import open_text, open_binary
 
 from retrieve.data import Doc, Ref, Collection
 

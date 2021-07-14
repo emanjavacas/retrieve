@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 
 setup(
     name='text-reuse-retrieve',
-    version='0.1.7',
+    version='0.1.10',
     description='A Python package to perform Text Reuse Detection',
     url='https://github.com/emanjavacas/retrieve',
     author='Enrique Manjavacas',
@@ -13,7 +13,7 @@ setup(
     package_dir={'': 'src'},
     packages=find_packages(where='src'),
     include_package_data=True,
-    ext_modules=cythonize('ext/_align.pyx'),
+    # ext_modules=cythonize('ext/_align.pyx'), # disabling cython extension for now
     install_requires=[
         'Cython>=0.29.19',
         'numpy>=1.17.5',
@@ -30,7 +30,7 @@ setup(
         # 'pyemd>=0.5.1',
         # 'fastText==0.9.2',
     ],
-
+    extras_require={":python_version<'3.7'": ["importlib_resources"]},
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
