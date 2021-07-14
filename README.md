@@ -18,7 +18,7 @@ Typically, text reuse retrieval software improves results by using lemmatized in
 
 RETRIEVE can be installed from PyPI using `pip`. Just fire up a command prompt and type:
 
-```pip install retrieve```
+```pip install text-reuse-retrieve```
 
 ## Installation from source
 
