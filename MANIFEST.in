@@ -1,5 +1,6 @@
 include LICENSE
 include README.md
+include ext/_align.pyx
 recursive-include src/retrieve/resources/ *.json *.books *.stop *.gz *.zip
 graft src/retrieve/viz/static
 graft src/retrieve/viz/templates

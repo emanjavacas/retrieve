@@ -5,7 +5,7 @@ from Cython.Build import cythonize
 
 setup(
     name='text-reuse-retrieve',
-    version='0.1.5',
+    version='0.1.6',
     description='A Python package to perform Text Reuse Detection',
     url='https://github.com/emanjavacas/retrieve',
     author='Enrique Manjavacas',
