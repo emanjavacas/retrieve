@@ -33,3 +33,13 @@ def enable_log_level(level=logging.DEBUG):
 from . import utils
 from .pipeline import pipeline, Results
 from .embeddings import Embeddings
+
+# package version
+import sys
+
+if sys.version_info >= (3, 8):
+    from importlib import metadata
+else:
+    import importlib_metadata as metadata
+
+__version__ = metadata.version('text-reuse-retrieve')
