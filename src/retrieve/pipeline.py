@@ -70,7 +70,7 @@ class Results:
     def get_top_matches(self, n=None, min_sim=0, max_sim=None, sample=False):
         x, y, _ = sparse.find(self.sims > min_sim)
         score = self.sims[x, y]
-        # find returns a scipy matrix instead of a np array
+        # sparse.find returns a scipy matrix instead of a np array
         score = np.array(score)[0]
         if max_sim is not None:
             index, = np.where(score <= max_sim)
@@ -116,7 +116,7 @@ def pipeline(coll1, coll2=None,
     stats = {}
 
     with utils.timer() as timer:
-        # preprocessing
+        # * preprocessing
         TextPreprocessor(
             field=field, lower=lower, stopwords=stopwords, stop_field=stop_field,
         ).process_collections(
@@ -127,7 +127,7 @@ def pipeline(coll1, coll2=None,
 
         stats['preprocessing'] = timer(desc='Preprocessing')
 
-        # similarities
+        # * similarities
         # - set-based method
         if method.startswith('set'):
             coll1_feats = coll1.get_features(cast=set)

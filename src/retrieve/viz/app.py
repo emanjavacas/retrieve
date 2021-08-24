@@ -14,10 +14,12 @@ def extract_matching_words(doc1, doc2):
     doc2ws = [w for feat in doc2.get_features() for w in feat.split('--')]
     intersect = set(doc1ws).intersection(doc2ws)
     doc1ids, doc2ids = [], []
-    for idx, lem in enumerate(doc1.fields['lemma']):
+    field = 'lemma' if 'lemma' in doc1.fields else 'token'
+
+    for idx, lem in enumerate(doc1.fields[field]):
         if lem in intersect:
             doc1ids.append(idx)
-    for idx, lem in enumerate(doc2.fields['lemma']):
+    for idx, lem in enumerate(doc2.fields[field]):
         if lem in intersect:
             doc2ids.append(idx)
 
@@ -68,24 +70,18 @@ class VisualizerApp:
     def index(self):
         return render_template("index.html")
 
-    def matching(self, ctx=2):
+    def matching(self, ctx=50):
         data = flask.request.args
         row, col = int(data['row']), int(data['col'])
         doc1, doc2 = self.coll1[row], self.coll2[col]
         doc1ids, doc2ids = extract_matching_words(doc1, doc2)
-        # context doc1
-        doc1l = [self.coll1[i] for i in range(max(0, row-ctx), row)]
-        doc1r = [self.coll1[i] for i in range(row+1, min(len(self.coll1), row+ctx+1))]
-        # context doc2
-        doc2l = [self.coll2[i] for i in range(max(0, col-ctx), col)]
-        doc2r = [self.coll2[i] for i in range(col+1, min(len(self.coll2), col+ctx+1))]
 
-        return {'doc1': {'left': ' '.join(d.text for d in doc1l),
-                         'right': ' '.join(d.text for d in doc1r),
+        return {'doc1': {'left': ' '.join(self.coll1.get_doc_context_left(row, ctx)),
+                         'right': ' '.join(self.coll1.get_doc_context_right(row, ctx)),
                          'text': doc1.text, 'match': doc1ids,
                          'id': doc1.get_printable_doc_id()},
-                'doc2': {'left': ' '.join(d.text for d in doc2l),
-                         'right': ' '.join(d.text for d in doc2r),
+                'doc2': {'left': ' '.join(self.coll2.get_doc_context_left(col, ctx)),
+                         'right': ' '.join(self.coll2.get_doc_context_right(col, ctx)),
                          'text': doc2.text, 'match': doc2ids,
                          'id': doc2.get_printable_doc_id()}}
 

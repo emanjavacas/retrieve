@@ -13,7 +13,7 @@ if sys.version_info.minor < 7:
 else:
     from importlib.resources import open_text, open_binary
 
-from retrieve.data import Doc, Ref, Collection
+from retrieve.data import Doc, Ref, Collection, ShinglingCollection
 
 
 logger = logging.getLogger(__name__)
@@ -40,13 +40,13 @@ def read_testament_books(testament):
 read_testament_books.__test__ = False # Tell nose to ignore test
 
 
-def read_bible(path_or_file, fields=('token', 'pos', '_', 'lemma'),
+def read_bible(path_or_stream, fields=('token', 'pos', '_', 'lemma'),
                max_verses=-1, sort_docs=True, verse_ids=None):
 
-    if isinstance(path_or_file, str):
-        f = open(path_or_file)
+    if isinstance(path_or_stream, str):
+        f = open(path_or_stream)
     else: # assume is a stream
-        f = path_or_file
+        f = path_or_stream
 
     docs = []
     for line in f:
@@ -85,6 +85,17 @@ def read_bible(path_or_file, fields=('token', 'pos', '_', 'lemma'),
 def read_vulgate(**kwargs):
     zipf = zipfile.ZipFile(open_binary('retrieve.resources.texts', 'vulgate.zip'))
     return read_bible(io.StringIO(zipf.read('vulgate.csv').decode()), **kwargs)
+
+
+def load_alice(**kwargs):
+    zipf = zipfile.ZipFile(open_binary('retrieve.resources.texts', 'alice.zip'))
+    paths = []
+    for f in zipf.filelist:
+        if zipf.getinfo(f.filename).is_dir():
+            continue
+        stream = io.StringIO(zipf.read(f.filename).decode())
+        paths.append((f.filename, stream))
+    return ShinglingCollection.from_csv(*paths, **kwargs)
 
 
 def load_bible(docs, name='bible',
@@ -237,3 +248,4 @@ def load_bernard(directory='data/texts/bernard',
     shingled_docs = Collection(shingled_docs, name='Bernard')
 
     return shingled_docs, bible, shingled_refs
+        

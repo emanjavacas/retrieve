@@ -1,4 +1,5 @@
 
+import os
 import itertools
 import uuid
 import functools
@@ -79,21 +80,21 @@ class Doc:
         self.doc_id = doc_id
         self.fields = {f: data for f, data in fields.items() if f not in ignore_fields}
         # check lengths
-        self._check_fields(self.fields)
+        self._check_fields(self.fields, doc_id)
         # data
         self._features = None
         self._preprocessed_features = None
 
     @staticmethod
-    def _check_fields(fields):
+    def _check_fields(fields, doc_id):
         length = None
         for field, data in fields.items():
             if length is None:
                 length = len(data)
             else:
                 if len(data) != length:
-                    raise ValueError("Expected {} of {} but got {}".format(
-                        length, field, len(data)))
+                    raise ValueError("Expected {} of {} but got {} for doc: {}".format(
+                        length, field, len(data), str(doc_id)))
 
     @property
     def text(self):
@@ -157,6 +158,35 @@ setattr(Doc, 'local_alignment', _wrap_fn(local_alignment))
 setattr(Doc, 'get_horizontal_alignment', _wrap_fn(get_horizontal_alignment))
 
 
+def shingle_docs(doc, f_id, overlap=10, window=20):
+    """
+    Produce shingles from a given input dictionary with fields.
+
+    Arguments
+    =========
+    doc : Doc, instance of a (possibly very long) document
+    f_id : str, identifier for the input file, for example, the input file path
+    overlap : int, the overlap in tokens over consecutive documents
+    window : int, the size of the shingled documents
+    """
+    output = []
+    n_words = len(doc[next(iter(doc.keys()))])
+
+    for start in range(0, n_words, window - overlap):
+        # doc might be smaller than window
+        stop = min(start + window, n_words)
+        assert start < stop, (start, stop, f_id)
+        # doc id
+        doc_id = f_id, (start, stop)
+        # prepare doc
+        fields = {key: vals[start:stop] for key, vals in doc.items()}
+        fields['ids'] = list(range(start, stop))
+
+        output.append(Doc(fields=fields, doc_id=doc_id))
+
+    return output
+
+
 class Collection:
     """
     Class representing a collection of docs
@@ -171,13 +201,12 @@ class Collection:
         # identifier for collection
         self.name = name or str(uuid.uuid4())[:8]
         # processing metadata
-        self.preprocesing_summary = None
+        self.preprocessing_summary = None
         self.fsel_summary = None
 
     def __getitem__(self, idx):
         if isinstance(idx, np.integer):
             idx = int(idx)
-
         if isinstance(idx, int):
             # access by index
             return self._docs[idx]
@@ -197,6 +226,26 @@ class Collection:
         # access by doc id
         return self._doc_ids[doc_id]
 
+    def get_doc_context_left(self, doc_idx, n_words):
+        idx, text = doc_idx - 1, []
+        while idx >= 0:
+            text.extend(reversed(self[idx].get_features(field='token')))
+            if len(text) >= n_words:
+                text = text[-n_words:]
+                break
+            idx -= 1
+        return ' '.join(reversed(text))
+
+    def get_doc_context_right(self, doc_idx, n_words):
+        idx, text = doc_idx + 1, []
+        while idx < len(self):
+            text.extend(self[idx].get_features(field='token'))
+            if len(text) >= n_words:
+                text = text[:n_words]
+                break
+            idx += 1
+        return ' '.join(text)
+
     def get_docs(self, index=None):
         """
         Generator over docs
@@ -206,8 +255,7 @@ class Collection:
         index : list or set or dict of document indices to get (optional)
         """
         # TODO: index should probably be based on doc ids
-        if index is not None:
-            index = set(index)
+        index = set(index) if index is not None else None
         for idx, doc in enumerate(self._docs):
             if index is not None and idx not in index:
                 continue
@@ -269,9 +317,7 @@ class Collection:
             w for doc in self.get_docs() for w in doc.fields[field])
 
     @classmethod
-    def from_file(cls, *paths, 
-                  # shingling
-                  do_shingling=False, shingle_overlap=10, shingle_window=20):
+    def from_file(cls, *paths):
 
         docs = []
         for path in paths:
@@ -282,25 +328,17 @@ class Collection:
                     if not line:
                         continue
                     lines.append(line.split())
-            if do_shingling:
-                for doc in shingle_docs(
-                        {'token': [tok for l in lines for tok in l]}, path,
-                        overlap=shingle_overlap, window=shingle_window):
-                    docs.append(doc)
-            else:
-                d_id = 0
-                for line in lines:
-                    docs.append(Doc({'token': line}, doc_id=(path, d_id)))
-                    d_id += 1
+            d_id = 0
+            for line in lines:
+                docs.append(Doc({'token': line}, doc_id=(path, d_id)))
+                d_id += 1
 
         return cls(docs)
 
     @classmethod
-    def from_csv(cls, *paths, drop_diacritics=None, 
+    def from_csv(cls, *paths,
                  fields=('token', 'lemma', 'pos'), sep='\t', read_header=False,
-                 ignore_empty_lines=False, 
-                 # shingling
-                 do_shingling=False, shingle_overlap=10, shingle_window=20):
+                 ignore_empty_lines=False, **kwargs):
         """
         Arguments
         =========
@@ -322,20 +360,178 @@ class Collection:
         using sentence numbers as doc ids
         """
         docs = []
+
         for path in paths:
-            d_id = 0
+            doc_id = '.'.join(os.path.basename(path).split('.')[:-1])
+            sent = 0
             for doc in read_csv(path,
                     fields=fields, sep=sep, read_header=read_header, 
                     ignore_empty_lines=ignore_empty_lines):
-                if do_shingling:
-                    for shingle in shingle_docs(
-                            doc, path, overlap=shingle_overlap, window=shingle_window):
-                        docs.append(shingle)
-                else:
-                    docs.append(Doc(doc, doc_id=(path, d_id)))
-                    d_id += 1
+                docs.append(Doc(doc, doc_id=(doc_id, sent)))
+                sent += 1
 
-        return cls(docs)
+        return cls(docs, **kwargs)
+
+
+class ShinglingCollection(Collection):
+    """
+    Create a Collection from a given list of text documents `docs`, where each
+    document is a large section of text (for example a book or a chapter).
+    This supra-documents are segmented on the fly into shingles in order to
+    perform fine-grained text reuse detection.
+
+    Arguments
+    =========
+
+    docs - list of dicts, where each dict corresponds to a doc, and contains,
+        at least, the key 'token', which corresponds to the input tokens.
+        Additional fields like 'pos' or 'lemma' can later be used for creating
+        features. A key 'doc_id' can be passed in order to identify the document
+        later on.
+    """
+    def __init__(self, docs:List[Dict], window, overlap, name=None):
+        # identifier for collection
+        self.name = name or str(uuid.uuid4())[:8]
+        # processing metadata
+        self.preprocessing_summary = None
+        self.fsel_summary = None
+
+        # some checks on the input docs
+        keys = docs[0].keys()
+        if 'token' not in keys:
+            raise ValueError("At least 'token' must be in input documents")
+        for doc in docs:
+            if doc.keys() != keys:
+                raise ValueError("All documents must have same keys")
+        self._docs = docs
+        # build indices for documents
+        self._id2span, self._idx2id, self._doc_id2doc_idx = \
+            self._build_indices(docs, window, overlap)
+        self._id2idx = {id: idx for idx, id in self._idx2id.items()}
+        # store created shingled docs
+        self._shingles = {}
+        for doc in self.get_docs():
+            self._shingles[doc.doc_id] = doc
+
+    @staticmethod
+    def _build_indices(docs, window, overlap):
+        """
+        Build indices to easily and quickly create docs on the fly
+        """
+        doc_id2doc_idx, id2span, idx2id = {}, {}, {}
+        n_docs = 0
+        for doc_idx, doc in enumerate(docs):
+            doc_id = doc_idx
+            if 'doc_id' in doc:
+                doc_id = doc['doc_id']
+            doc_id2doc_idx[doc_id] = doc_idx
+            n_words = len(doc['token'])
+            for shingle_idx, start in enumerate(range(0, n_words, window - overlap)):
+                # doc might be smaller than window
+                stop = min(start + window, n_words)
+                assert start < stop, (start, stop)
+                id2span[doc_id, shingle_idx] = (start, stop)
+                idx2id[n_docs] = doc_id, shingle_idx
+                n_docs += 1
+        return id2span, idx2id, doc_id2doc_idx
+
+    def _create_doc(self, doc_id):
+        """
+        Arguments
+        =========
+
+        `doc_id`: tuple(doc_id, shingle_idx), doc_id refers to the id of the
+            supradoc (e.g. book, chapter, etc...)
+        """
+        start, stop = self._id2span[doc_id]
+        # get the id of the supradoc
+        doc_id, shingle_idx = doc_id
+        doc_idx = self._doc_id2doc_idx[doc_id]
+        fields = {key: vals[start:stop] for key, vals in self._docs[doc_idx].items() 
+            if key != 'doc_id'}
+        return Doc(fields=fields, doc_id=(doc_id, shingle_idx))
+
+    def __getitem__(self, idx):
+        if isinstance(idx, np.integer):
+            idx = int(idx)
+        if isinstance(idx, int):
+            # transform idx to doc id
+            idx = self._idx2id[idx]
+        # access always by doc_id
+        return self._shingles[idx]
+
+    def __len__(self):
+        return len(self._idx2id)
+
+    def __contains__(self, doc_id):
+        return doc_id in self._id2idx
+
+    def __iter__(self):
+        yield from self.get_docs()
+
+    def get_doc_idx(self, doc_id):
+        # access by doc id
+        return self._id2idx[doc_id]
+
+    def get_docs(self, index=None):
+        """
+        Generator over docs
+
+        Arguments
+        =========
+        index : list or set or dict of document indices to get (optional)
+        """
+        index = set(index) if index is not None else None
+        for idx, doc_id in enumerate(self._id2idx):
+            if index is not None and idx not in index:
+                continue
+            if doc_id not in self._shingles:
+                self._shingles[doc_id] = self._create_doc(doc_id)
+            yield self[doc_id]
+
+    def get_doc_context_left(self, doc_idx, n_words):
+        doc_id, shingle_idx = self._idx2id[doc_idx]
+        start, _ = self._id2span[doc_id, shingle_idx]
+        doc = self._docs[self._doc_id2doc_idx[doc_id]]
+        return doc['token'][max(0, start - n_words - 1): start]
+
+    def get_doc_context_right(self, doc_idx, n_words):
+        doc_id, shingle_idx = self._idx2id[doc_idx]
+        _, stop = self._id2span[doc_id, shingle_idx]
+        doc = self._docs[self._doc_id2doc_idx[doc_id]]
+        return doc['token'][stop:min(len(doc['token']), stop + 1 + n_words)]
+
+    @classmethod
+    def from_file(cls, *paths, window=20, overlap=5, **kwargs):
+        docs = []
+        for path in paths:
+            doc_id = '.'.join(os.path.basename(path).split('.')[:-1])
+            with open(path) as f:
+                lines = ' '.join(f.readlines().split())
+                docs.append({'token': lines.split(), 'doc_id': doc_id})
+
+        return cls(docs, window, overlap, **kwargs)
+
+    @classmethod
+    def from_csv(cls, *paths_or_streams, window=20, overlap=5, 
+                 fields=('token', 'lemma', 'pos'), sep='\t', read_header=False,
+                 **kwargs):
+        docs = []
+
+        for path in paths_or_streams:
+            if isinstance(path, tuple):
+                path, stream = path
+            else:
+                stream = open(path)
+            doc_id = '.'.join(os.path.basename(path).split('.')[:-1])
+            doc = read_csv(stream, fields=fields, sep=sep, read_header=read_header,
+                ignore_empty_lines=True)
+            assert len(doc) == 1, len(doc)
+            doc = doc[0]
+            doc['doc_id'] = doc_id
+            docs.append(doc)
+
+        return cls(docs, window, overlap, **kwargs)
 
 
 class TextPreprocessor:
@@ -463,7 +659,7 @@ class TextPreprocessor:
         summary = self.get_summary()
         summary['ngrams'] = ngram_extractor.get_summary()
         for coll in colls:
-            coll.preprocesing_summary = summary
+            coll.preprocessing_summary = summary
             for doc in coll.get_docs():
                 features = self.process(doc, ngram_extractor=ngram_extractor)
                 if post_fn is not None:
@@ -635,7 +831,7 @@ class FeatureSelector:
             yield [ft for ft in text if ft in vocab]
 
 
-def read_csv(path, drop_diacritics=None,
+def read_csv(path_or_stream, drop_diacritics=None,
              fields=('token', 'pos', '_', 'lemma'), sep='\t', 
              read_header=False, ignore_empty_lines=False):
     """
@@ -647,7 +843,7 @@ def read_csv(path, drop_diacritics=None,
     Arguments
     =========
 
-    path : str, path to file
+    path_or_stream : str, path to file or stream to read from
     drop_diacritics : iterable or None (optional), fields of the csv file for which
         diacritics should be ignored.
     fields : tuple (optional), field names corresponding to the columns in the csv.
@@ -656,72 +852,50 @@ def read_csv(path, drop_diacritics=None,
     read_header : bool, whether to use the header to read the fields
     """
     output = []
-    c_id = 0
 
-    with open(path) as f:
-        if read_header:
-            fields = next(f).strip().split(sep)
-        if 'token' not in fields:
-            raise ValueError("At least field `token` must be available")
-        if drop_diacritics is not None:
-            if isinstance(drop_diacritics, str):
-                drop_diacritics = [drop_diacritics]
-            drop_diacritics = set(drop_diacritics)
+    if isinstance(path_or_stream, str):
+        f = open(path_or_stream)
+    else: # assume is a stream
+        f = path_or_stream
 
-        sent = collections.defaultdict(list)
-        for line in f:
-            line = line.strip()
-            if not line:
-                if ignore_empty_lines:
-                    continue
-                elif sent:
-                    output.append(dict(sent))
-                    sent = collections.defaultdict(list)
-                    continue
-                else:
-                    # unexpected empty line at the beginning
-                    continue
+    if read_header:
+        fields = next(f).strip().split(sep)
+    if 'token' not in fields:
+        raise ValueError("At least field `token` must be available")
+    if drop_diacritics is not None:
+        if isinstance(drop_diacritics, str):
+            drop_diacritics = [drop_diacritics]
+        drop_diacritics = set(drop_diacritics)
 
-            data = line.split(sep)
-            if len(data) != len(fields):
-                raise ValueError(
-                    "Expected {} metadata fields, but got {}. File: {}"
-                    .format(len(fields), len(data), path))
+    sent = collections.defaultdict(list)
+    for line in f:
+        line = line.strip()
+        if not line:
+            if ignore_empty_lines:
+                continue
+            elif sent:
+                output.append(dict(sent))
+                sent = collections.defaultdict(list)
+                continue
+            else:
+                # unexpected empty line at the beginning
+                continue
 
-            for key, val in zip(fields, data):
-                if key == '_':
-                    continue
-                if drop_diacritics is not None and key in drop_diacritics:
-                    val = utils.drop_string_diacritics(val)
-                sent[key].append(val)
+        data = line.split(sep)
+        if len(data) != len(fields):
+            print(data, fields)
+            raise ValueError(
+                "Expected {} metadata fields, but got {}. File: {}"
+                .format(len(fields), len(data), path))
 
-    return output
-
-
-def shingle_docs(doc, f_id, overlap=10, window=20):
-    """
-    Produce shingles from a given input dictionary with fields.
-
-    Arguments
-    =========
-    doc : Doc, instance of a (possibly very long) document
-    f_id : str, identifier for the input file, for example, the input file path
-    overlap : int, the overlap in tokens over consecutive documents
-    window : int, the size of the shingled documents
-    """
-
-    output = []
-    n_words = len(doc[next(iter(doc.keys()))])
-    for start in range(0, n_words, window - overlap):
-        # doc might be smaller than window
-        stop = min(start + window, n_words)
-        assert start < stop, (start, stop, f_id)
-        # doc id
-        doc_id = f_id, (start, stop)
-        # prepare doc
-        fields = {key: vals[start:stop] for key, vals in doc.items()}
-        fields['ids'] = list(range(start, stop))
-
-        output.append(Doc(fields=fields, doc_id=doc_id))
+        for key, val in zip(fields, data):
+            if key == '_':
+                continue
+            if drop_diacritics is not None and key in drop_diacritics:
+                val = utils.drop_string_diacritics(val)
+            sent[key].append(val)
+        
+    if sent:
+        output.append(dict(sent))
 
     return output
