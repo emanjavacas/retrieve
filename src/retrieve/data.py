@@ -883,10 +883,9 @@ def read_csv(path_or_stream, drop_diacritics=None,
 
         data = line.split(sep)
         if len(data) != len(fields):
-            print(data, fields)
             raise ValueError(
-                "Expected {} metadata fields, but got {}. File: {}"
-                .format(len(fields), len(data), path))
+                "Expected {} metadata fields, but got {}."
+                .format(len(fields), len(data)))
 
         for key, val in zip(fields, data):
             if key == '_':
