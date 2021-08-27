@@ -49,7 +49,15 @@ def create_embedding_scorer(embs, match=2, mismatch=-1, **kwargs):
     return EmbeddingScorer(keys, S, match=match, mismatch=mismatch)
 
 
-class EmbeddingScorer:
+class BaseScorer:
+    def get_scores(self, s1, s2):
+        raise NotImplementedError
+
+    def get_maximum_score(self, s1, s2):
+        raise NotImplementedError
+
+
+class EmbeddingScorer(BaseScorer):
     def __init__(self, d, S, match=2, mismatch=-1):
         self.match = match
         self.mismatch = mismatch
@@ -71,7 +79,7 @@ def _get_constant_scores(s1, s2, match, mismatch):
     return scores
 
 
-class ConstantScorer:
+class ConstantScorer(BaseScorer):
     def __init__(self, match=2, mismatch=-1, manual_scores=None):
         self.match = match
         self.mismatch = mismatch

@@ -86,10 +86,12 @@ class Results:
 def pipeline(coll1, coll2=None,
              # Text Preprocessing
              field='lemma', lower=True, stopwords=None, stop_field='lemma',
+             drop_punctuation=True, punct_field='token',
              # Ngrams
              min_n=1, max_n=1, skip_k=0, sep='--',
              # Feature Selection
              criterion=None,
+             # Method params
              method='set-based', threshold=0, processes=-1, embs=None, chunk_size=5000,
              # Set-based
              # - SetSimilarity: similarity_fn
@@ -108,6 +110,72 @@ def pipeline(coll1, coll2=None,
              # return time stats
              return_stats=False, verbose=False):
 
+    """
+    Provides an interface to a full, highly configurable text reuse pipeline
+    
+    Arguments
+    =========
+    coll1 : retrieve.data.Collection, target collection
+    coll2 : retrieve.data.Collection (optional), source collection, if not given
+        the pipeline will comput intra-collection reuse
+    
+    Text preprocessing arguments
+    -----------------------------
+    field : str (default='lemma'), field to use as features
+    lower : bool (default=True), whether to lowercase all input features
+    stopwords : retrieve.utils.Stopwords (optional), stopwords to filter out
+    stop_field : str (default='lemma'), field to use for stopwords
+    drop_punctuation : bool (default=True), whether to remove punctuation
+    punct_field : str, (default='token'), field to use for punctuation
+    min_n : int (default=1), minimum token-level n-gram size
+    max_n : int (default=1), maximum token-level n-gram size
+    skip_k : int, (default=0), skip-grams skipping every `skip_k` tokens
+    sep : str (default='--'), string to use for binding n-grams
+    
+    Feature Selection arguments
+    ---------------------------
+    criterion : retrieve.data.Criterion (optional), 
+
+    Method arguments
+    ----------------
+    method : str (default='set-based'), method to use. One of
+        "set-based", "vsm-based" or "alignment-based".
+    method_params : dict, parameters passed to the method. These change
+        depending on the method used.
+        * set-based
+            - similarity_fn : str, one of ('containment', 'containment_min', 'jaccard')
+        * vsm-based
+            - parameters passed to the **sklearn,feature_extraction.text.TfidfVectorizer
+        * alignment-based
+            - scorer : a retrieve.methods.BaseScorer that computes the scores for the
+                input sequences
+            - open_gap : float, penalty for opening a gap
+            - extend_gap : float, penalty for extending a gap
+            - cutoff : float (between 0 and 1), only used if `use_soft_cosine` is True.
+                Ignore word-to-word similarities below this threshold
+            - beta : float, only used if `use_soft_cosine` is True. Exponent of
+                word-to-word cosine similarities. This helps skewing or flattening the
+                distribution of similarities
+    use_soft_cosine : bool, (default=False), whether to use soft-cosine (requires `embs`).
+        Only used if `method` is 'vsm-based'
+    soft_cosine_params : dict, parameters for the soft cosine method. Only used if
+        `use_soft_cosine` is passed and `method` is 'vsm-based'.
+        - cutoff : float, only used if passing `embs` (same as in alignment-based)
+        - beta : float, only used if passing `embs` (same as in alignment-based)
+    parallel_soft_cosine : bool (default=True), whether to parallelize the computation of
+        soft-cosine.
+    threshold : float (default=0), minimum similarity to retain the match. This helps
+        alleviating memory pressure, especially when processing large collections.
+    processes : float (default=-1 meaning use all available cores), number of cores to use
+        during the computation.
+    embs : retrieve.utils.Embeddings, only needed if `method` is 'alignment-based' or
+        'vsm-based' and `use_soft_cosine` is True.
+    chunk_size : int (default=5000), number of instances to consider at a time from the 
+        target collection (coll1). For very large collections, this may be necessary in
+        in combination with an appropriate `threshold` in order to make the result fit
+        in memory.
+    """
+
     colls = [coll for coll in [coll1, coll2] if coll is not None]
 
     if isinstance(stopwords, str):
@@ -119,6 +187,7 @@ def pipeline(coll1, coll2=None,
         # * preprocessing
         TextPreprocessor(
             field=field, lower=lower, stopwords=stopwords, stop_field=stop_field,
+            drop_punctuation=drop_punctuation, punct_field=punct_field,
         ).process_collections(
             *colls, min_n=min_n, max_n=max_n, skip_k=skip_k, sep=sep)
         fsel = FeatureSelector(*colls)

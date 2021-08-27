@@ -383,7 +383,7 @@ class ShinglingCollection(Collection):
     Arguments
     =========
 
-    docs - list of dicts, where each dict corresponds to a doc, and contains,
+    docs : list of dicts, where each dict corresponds to a doc, and contains,
         at least, the key 'token', which corresponds to the input tokens.
         Additional fields like 'pos' or 'lemma' can later be used for creating
         features. A key 'doc_id' can be passed in order to identify the document
@@ -440,7 +440,7 @@ class ShinglingCollection(Collection):
         Arguments
         =========
 
-        `doc_id`: tuple(doc_id, shingle_idx), doc_id refers to the id of the
+        doc_id : tuple(doc_id, shingle_idx), doc_id refers to the id of the
             supradoc (e.g. book, chapter, etc...)
         """
         start, stop = self._id2span[doc_id]
@@ -549,6 +549,9 @@ class TextPreprocessor:
                  replace_unk=False, drop_unk=False, unk_token='$unk$', unk_field='token',
                  stopwords=None, stop_field='lemma'):
         """
+        Arguments
+        =========
+
         field : str, what field to use to extract features
         lower : bool, whether to lowercase input text
         field_regexes : dict (field : regex), a dict mapping fields to regexes that tokens
@@ -651,6 +654,9 @@ class TextPreprocessor:
     def process_collections(self, *colls, post_fn=None, **kwargs):
         """
         Process entire collections
+
+        Arguments
+        =========
 
         post_fn : function that takes generator of ngrams and produces a new generator
         kwargs : Ngrams additional arguments
