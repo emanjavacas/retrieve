@@ -2,12 +2,6 @@
 import collections
 import numpy as np
 
-try:
-    import pyemd
-except ModuleNotFoundError:
-    # pyemd is not installed
-    pass
-
 
 def get_wmd_histograms(s1, s2, w2i):
     w1, weights1 = zip(*[(w2i[w], c) for w, c in collections.Counter(s1).most_common()
@@ -28,6 +22,8 @@ def get_wmd(s1, s2, dists, w2i, get_flow=False):
     """
     Get WMD for two input sentences
     """
+    import pyemd
+
     s1, s2 = s1.split(), s2.split()
     h1, h2, words = get_wmd_histograms(s1, s2, w2i)
     D = dists[np.ix_(words, words)]
