@@ -46,6 +46,18 @@ def load_embeddings(path, vocab=None):
     return embs
 
 
+def load_fasttext(path):
+    try:
+        import fastText
+        return fastText.load(path)
+    except ModuleNotFoundError:
+        try:
+            import fasttext
+            return fasttext.load_model(path)
+        except ModuleNotFoundError:
+            raise ValueError("Couldn't import `fastText` or `fasttext` module")
+
+
 def normalize_vectors(vectors):
     return vectors / np.linalg.norm(vectors, axis=1)[:, None]
 
@@ -122,12 +134,10 @@ class Embeddings:
     def from_fasttext(cls, path, vocab):
         if vocab is None:
             raise ValueError("FastText model requires vocab")
-        try:
-            import fastText
-        except ModuleNotFoundError:
-            raise ValueError("Couldn't import `fastText` module")
-        model, vectors = fastText.load_model(path), []
 
+        model = load_fasttext(path)
+
+        vectors = []
         for word in vocab:
             vectors.append(model.get_word_vector(word))
 
@@ -341,16 +351,7 @@ def train_gensim_embeddings(path, output_path=None, **kwargs):
 
 
 def export_fasttext_embeddings(path, vocab, output_path=None):
-    try:
-        import fastText
-        model = fastText.load(path)
-    except ModuleNotFoundError:
-        try:
-            import fasttext
-            model = fasttext.load_model(path)
-        except ModuleNotFoundError:
-            raise ValueError("Couldn't import `fastText` or `fasttext` module")
-
+    model = load_fasttext(path)
     keys, vectors = {}, []
     for idx, word in enumerate(vocab):
         keys[word] = idx
