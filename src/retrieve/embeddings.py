@@ -111,6 +111,14 @@ class Embeddings:
         return np.mean(self.vectors, 0)
 
     @classmethod
+    def require_embeddings(cls, embs, msg='', **kwargs):
+        if isinstance(embs, str):
+            embs = cls.from_file(embs, **kwargs)
+        if not isinstance(embs, cls):
+            raise ValueError(msg)
+        return embs
+
+    @classmethod
     def from_fasttext(cls, path, vocab):
         if vocab is None:
             raise ValueError("FastText model requires vocab")
@@ -335,10 +343,14 @@ def train_gensim_embeddings(path, output_path=None, **kwargs):
 def export_fasttext_embeddings(path, vocab, output_path=None):
     try:
         import fastText
+        model = fastText.load(path)
     except ModuleNotFoundError:
-        raise ValueError("Couldn't import `fastText` module")
+        try:
+            import fasttext
+            model = fasttext.load_model(path)
+        except ModuleNotFoundError:
+            raise ValueError("Couldn't import `fastText` or `fasttext` module")
 
-    model = fastText.load(path)
     keys, vectors = {}, []
     for idx, word in enumerate(vocab):
         keys[word] = idx
