@@ -4,5 +4,4 @@ build/
 .vscode/
 .DS_Store
 dist/
-src/retrieve/resources/texts/*/*txt
-src/retrieve/resources/texts/*/*json
+data/
