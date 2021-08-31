@@ -11,7 +11,9 @@ class TestCriterion(unittest.TestCase):
     def setUp(self):
         collection = load_vulgate()
         stops = utils.Stopwords('latin.stop')
-        processor = TextPreprocessor(stopwords=stops, field_regexes={'token': '[a-z]+'})
+        processor = TextPreprocessor(
+            stopwords=stops, 
+            field_regexes={'token': {'should_match': True, 'regex': '[a-z]+'}})
         processor.process_collections(collection)
         self.fsel = FeatureSelector(collection)
 
