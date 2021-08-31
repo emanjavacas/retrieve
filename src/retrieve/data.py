@@ -234,7 +234,7 @@ class Collection:
                 text = text[-n_words:]
                 break
             idx -= 1
-        return ' '.join(reversed(text))
+        return list(reversed(text))
 
     def get_doc_context_right(self, doc_idx, n_words):
         idx, text = doc_idx + 1, []
@@ -244,7 +244,7 @@ class Collection:
                 text = text[:n_words]
                 break
             idx += 1
-        return ' '.join(text)
+        return list(text)
 
     def get_docs(self, index=None):
         """
@@ -534,6 +534,15 @@ class ShinglingCollection(Collection):
         return cls(docs, window, overlap, **kwargs)
 
 
+def get_vocab_from_colls(*colls, field=None):
+    output = collections.Counter()
+    for coll in colls:
+        for doc in coll:
+            output.update(doc.get_features(field=field))
+    output, _ = zip(*output.most_common())
+    return output
+
+
 class TextPreprocessor:
     """
     Preprocess docs based on doc metadata
@@ -618,12 +627,14 @@ class TextPreprocessor:
                         doc.fields[self.stop_field][i]))
                     continue
 
-            reg_match = True
+            reg_drop = False
             for re_field, regex in self.field_regexes.items():
-                if not re.match(regex, doc.fields[re_field][i]):
-                    reg_match = False
+                should_match = regex.get('should_match', False)
+                m = re.match(regex['regex'], doc.fields[re_field][i])
+                if (should_match and not m) or (not should_match and m):
+                    reg_drop = True
                     break
-            if not reg_match:
+            if reg_drop:
                 logger.debug("Dropping regex {}: {}".format(
                     re_field, doc.fields[re_field][i]))
                 continue
