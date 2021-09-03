@@ -20,19 +20,28 @@ logger = logging.getLogger(__name__)
 class Match:
     def __init__(self, doc1, doc2, sim, 
                  with_context=False, coll1=None, coll2=None, n_words=25):
+
+        self.with_context = with_context
         if with_context:
-            self._repr = Match.get_match_with_context(
+            self._meta = Match.get_match_with_context(
                 doc1, doc2, sim, coll1, coll2, n_words=n_words)
         else:
-            self._repr = Match.get_match(doc1, doc2, sim)
+            self._meta = Match.get_match(doc1, doc2, sim)
 
     def __repr__(self):
-        return self._repr
+        return self.get_printable_match()
+
+    def get_data(self):
+        return self._meta
 
     @staticmethod
     def get_match(doc1, doc2, sim):
-        return 'Similarity -> {:.5f}\n\t{}: {}\n\t{}: {}'.format(
-            sim, doc1.doc_id, doc1.text, doc2.doc_id, doc2.text)
+        return {
+            'similarity': sim, 
+            'doc1id': doc1.doc_id, 
+            'doc1text': doc1.text,
+            'doc2id': doc2.doc_id, 
+            'doc2text': doc2.text}
 
     @staticmethod
     def get_match_with_context(doc1, doc2, sim, coll1, coll2, n_words=25):
@@ -40,12 +49,34 @@ class Match:
         doc1right = coll1.get_doc_context_right(coll1.get_doc_idx(doc1.doc_id), n_words)
         doc2left = coll2.get_doc_context_left(coll2.get_doc_idx(doc2.doc_id), n_words)
         doc2right = coll2.get_doc_context_right(coll2.get_doc_idx(doc2.doc_id), n_words)
-        return 'Similarity -> {:.5f}\n\t{}:\n\t{}\n\n\t{}:\n\t{}'.format(
-            sim,
-            doc1.doc_id, '{}\n\t    {}\n\t{}'.format(
-                ' '.join(doc1left), doc1.text, ' '.join(doc1right)),
-            doc2.doc_id, '{}\n\t    {}\n\t{}'.format(
-                ' '.join(doc2left), doc2.text, ' '.join(doc2right)))
+        return {
+            'similarity': sim, 
+            'doc1id': doc1.doc_id,
+            'doc1left': ' '.join(doc1left),
+            'doc1text': doc1.text,
+            'doc1right': ' '.join(doc1right),
+            'doc2id': doc2.doc_id, 
+            'doc2left': ' '.join(doc2left),
+            'doc2text': doc2.text,
+            'doc2right': ' '.join(doc2right)}
+
+    def get_printable_match(self):
+        if self.with_context:
+            return 'Similarity -> {:.5f}\n\t{}:\n\t{}\n\n\t{}:\n\t{}'.format(
+                self._meta['similarity'],
+                self._meta['doc1id'],
+                '{}\n\t    {}\n\t{}'.format(
+                    self._meta['doc1left'], self._meta['doc1text'], self._meta['doc1right']),
+                self._meta['doc2id'],
+                '{}\n\t    {}\n\t{}'.format(
+                    self._meta['doc2left'], self._meta['doc2text'], self._meta['doc2right']))
+        else:
+            return 'Similarity -> {:.5f}\n\t{}: {}\n\t{}: {}'.format(
+                self._meta['similarity'], 
+                self._meta['doc1id'], 
+                self._meta['doc1text'],
+                self._meta['doc2id'],
+                self._meta['doc2text'])
 
 
 class Results:
@@ -88,6 +119,24 @@ class Results:
                 doc1, doc2, sim, 
                 with_context=with_context, 
                 coll1=self.coll1, coll2=self.coll2, n_words=n_words)
+
+    def export_top_matches_to_csv(self, outputpath, tuple_sep='+++', **kwargs):
+        with open(outputpath, 'w+') as f:
+            header = None
+            for m in self.get_top_matches(**kwargs):
+                if header is None:
+                    header = list(m.get_data())
+                    f.write('\t'.join(header) + '\n')
+                row = ''
+                for key, val in m.get_data().items():
+                    if isinstance(val, float):
+                        val = '{:.5f}'.format(val)
+                    elif isinstance(val, tuple):
+                        val = tuple_sep.join(map(str, val))
+                    else:
+                        val = str(val)
+                    row += ('\t' if row else '') + val
+                f.write(row + '\n')
 
 
 def pipeline(coll1, coll2=None,
