@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 class Match:
     def __init__(self, doc1, doc2, sim, 
-                 with_context=False, coll1=None, coll2=None, n_words=25):
+                 with_context=False, with_alignment=False,
+                 coll1=None, coll2=None, n_words=25):
 
         self.with_context = with_context
         if with_context:
@@ -28,11 +29,26 @@ class Match:
         else:
             self._meta = Match.get_match(doc1, doc2, sim)
 
+        # add horizontal alignment
+        try:
+            a1, a2, _ = doc1.local_alignment(doc2, field='lemma')
+        except:
+            a1, a2, _ = doc1.local_alignment(doc2, field='token')
+        self._horizontal_alignment = doc1.get_horizontal_alignment(
+            doc2, a1=a1, a2=a2, field='token')
+
     def __repr__(self):
         return self.get_printable_match()
 
     def get_data(self):
         return self._meta
+
+    def print_alignment(self):
+        print('Similarity -> {:.5f}\n\t{}\n\t{}\n\t{}'.format(
+                self._meta['similarity'], 
+                self._meta['doc1id'], 
+                '\t{}\n\t\t{}\n\t\t{}'.format(*self._horizontal_alignment),
+                self._meta['doc2id']))
 
     @staticmethod
     def get_match(doc1, doc2, sim):
@@ -101,14 +117,32 @@ class Results:
         sparse_utils.set_threshold(self.sims, min_sim)
 
     def get_top_matches(self, n=None, min_sim=0, max_sim=None, sample=False, 
-                        with_context=False, n_words=25):
+                        with_context=False, n_words=25, 
+                        whitelist_x=None, whitelist_y=None,
+                        blacklist_x=None, blacklist_y=None):
+
         x, y, _ = sparse.find(self.sims > min_sim)
         score = self.sims[x, y]
         # sparse.find returns a scipy matrix instead of a np array
         score = np.array(score)[0]
         if max_sim is not None:
-            index, = np.where(score <= max_sim)
-            x, y, score = x[index], y[index], score[index]
+            keep, = np.where(score <= max_sim)
+            x, y, score = x[keep], y[keep], score[keep]
+
+        # white/blacklisting
+        if whitelist_x is not None:
+            drop, = np.where(~np.isin(x, whitelist_x))
+            x, y, score = np.delete(x, drop), np.delete(y, drop), np.delete(score, drop)
+        elif blacklist_x is not None:
+            drop, = np.where(np.isin(x, blacklist_x))
+            x, y, score = np.delete(x, drop), np.delete(y, drop), np.delete(score, drop)
+        if whitelist_y is not None:
+            drop, = np.where(~np.isin(y, whitelist_y))
+            x, y, score = np.delete(x, drop), np.delete(y, drop), np.delete(score, drop)
+        elif blacklist_y is not None:
+            drop, = np.where(np.isin(y, blacklist_y))
+            x, y, score = np.delete(x, drop), np.delete(y, drop), np.delete(score, drop)
+
         index = np.argsort(score)[::-1]
         if sample and n is not None:
             index = np.random.choice(np.arange(len(index)), size=n, replace=False)

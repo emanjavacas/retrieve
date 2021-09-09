@@ -79,7 +79,6 @@ class LookupScorer(BaseScorer):
             [w for coll in [coll1, coll2] for feats in coll.get_features() for w in feats]
         ).most_common())
         counts = np.array(counts)
-        ranks = np.argsort(np.array(counts))[::-1]
         scaled = MinMaxScaler(
             feature_range=(self.offset_min, self.offset_max)
         ).fit_transform(np.power(counts, 1/self.offset_smoothing).reshape(-1, 1)).reshape(-1)
