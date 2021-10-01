@@ -140,12 +140,18 @@ class Results:
             drop, = np.where(np.isin(y, blacklist_y))
             x, y, score = np.delete(x, drop), np.delete(y, drop), np.delete(score, drop)
 
-        index = np.argsort(score)[::-1]
-        if sample and n is not None:
-            index = np.random.choice(np.arange(len(index)), size=n, replace=False)
-        n, i = n or len(score), 0
-        while i < n:
+        if sample:
+            index = np.random.permutation(np.arange(len(score)))
+        else:
+            index = np.argsort(score)[::-1]
+
+        max_instances = n if n is not None else len(score)
+        cur = yielded = 0
+
+        while yielded < max_instances and cur < len(score):
+            i = index[cur]
             doc1, doc2, sim = self.coll1[x[i]], self.coll2[y[i]], score[i]
+            cur += 1
             # filter out based on filter function
             if filter_func is not None and filter_func(doc1, doc2, sim):
                 continue
@@ -153,25 +159,13 @@ class Results:
                 doc1, doc2, sim, 
                 with_context=with_context, 
                 coll1=self.coll1, coll2=self.coll2, n_words=n_words)
-            i += 1
+            yielded += 1
 
-    def export_top_matches_to_csv(self, outputpath, tuple_sep='+++', **kwargs):
-        with open(outputpath, 'w+') as f:
-            header = None
-            for m in self.get_top_matches(**kwargs):
-                if header is None:
-                    header = list(m.get_data())
-                    f.write('\t'.join(header) + '\n')
-                row = ''
-                for key, val in m.get_data().items():
-                    if isinstance(val, float):
-                        val = '{:.5f}'.format(val)
-                    elif isinstance(val, tuple):
-                        val = tuple_sep.join(map(str, val))
-                    else:
-                        val = str(val)
-                    row += ('\t' if row else '') + val
-                f.write(row + '\n')
+    def export_top_matches_to_csv(self, outputpath, index=True, **kwargs):
+        import pandas as pd
+        pd.DataFrame.from_dict(
+            [m.get_data() for m in self.get_top_matches(**kwargs)]
+        ).to_csv(outputpath, index=index)
 
 
 def pipeline(coll1, coll2=None,
