@@ -143,8 +143,8 @@ class Results:
         index = np.argsort(score)[::-1]
         if sample and n is not None:
             index = np.random.choice(np.arange(len(index)), size=n, replace=False)
-        n = n or len(score)
-        for i in index[:n]:
+        n, i = n or len(score), 0
+        while i < n:
             doc1, doc2, sim = self.coll1[x[i]], self.coll2[y[i]], score[i]
             # filter out based on filter function
             if filter_func is not None and filter_func(doc1, doc2, sim):
@@ -153,6 +153,7 @@ class Results:
                 doc1, doc2, sim, 
                 with_context=with_context, 
                 coll1=self.coll1, coll2=self.coll2, n_words=n_words)
+            i += 1
 
     def export_top_matches_to_csv(self, outputpath, tuple_sep='+++', **kwargs):
         with open(outputpath, 'w+') as f:
