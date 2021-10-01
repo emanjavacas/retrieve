@@ -1,14 +1,11 @@
 
 import logging
-import collections
 
 import numpy as np
-from numpy.lib.arraysetops import isin
-from numpy.lib.function_base import _sinc_dispatcher
 import scipy.sparse as sparse
 
 from retrieve import utils, sparse_utils
-from retrieve.data import Criterion, TextPreprocessor, FeatureSelector, get_vocab_from_colls
+from retrieve.data import TextPreprocessor, FeatureSelector, get_vocab_from_colls
 from retrieve.embeddings import Embeddings
 from retrieve.methods import SetSimilarity, Tfidf, align_collections
 from retrieve import methods
@@ -19,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 class Match:
     def __init__(self, doc1, doc2, sim, 
-                 with_context=False, with_alignment=False,
+                 with_context=False,
                  coll1=None, coll2=None, n_words=25):
 
         self.with_context = with_context
@@ -117,7 +114,7 @@ class Results:
         sparse_utils.set_threshold(self.sims, min_sim)
 
     def get_top_matches(self, n=None, min_sim=0, max_sim=None, sample=False, 
-                        with_context=False, n_words=25, 
+                        with_context=False, n_words=25, filter_func=None,
                         whitelist_x=None, whitelist_y=None,
                         blacklist_x=None, blacklist_y=None):
 
@@ -149,6 +146,9 @@ class Results:
         n = n or len(score)
         for i in index[:n]:
             doc1, doc2, sim = self.coll1[x[i]], self.coll2[y[i]], score[i]
+            # filter out based on filter function
+            if filter_func is not None and filter_func(doc1, doc2, sim):
+                continue
             yield Match(
                 doc1, doc2, sim, 
                 with_context=with_context, 
